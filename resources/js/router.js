@@ -41,6 +41,8 @@ import AdminLayout from './layouts/AdminLayout.vue';
 import AdminDashboard from './pages/admin/dashboard.vue';
 import AdminUsers from './pages/admin/users/index.vue';
 
+import AdminChats from './pages/admin/chats.vue';
+
 import AdminBags from './pages/admin/bags/index.vue';
 import AdminBagCreate from './pages/admin/bags/create.vue';
 import AdminBagShow from './pages/admin/bags/show.vue';
@@ -185,6 +187,15 @@ const routes = [
                 component: AdminUsers
             },
 
+            // -------------------------------
+            // CUSTOMER CHAT
+            // -------------------------------
+
+            {
+                path: 'chats',
+                name: 'admin.chats',
+                component: AdminChats
+            },
 
             // -------------------------------
             // BAGS
@@ -214,7 +225,6 @@ const routes = [
                 component: AdminBagEdit
             },
 
-
             // -------------------------------
             // ADMIN PROFILE
             // -------------------------------
@@ -225,7 +235,6 @@ const routes = [
                 component: AdminProfile
             },
 
-
             // -------------------------------
             // ADMIN THEME
             // -------------------------------
@@ -235,7 +244,6 @@ const routes = [
                 name: 'admin.theme',
                 component: AdminTheme
             },
-
 
             // -------------------------------
             // ADMIN PASSWORD

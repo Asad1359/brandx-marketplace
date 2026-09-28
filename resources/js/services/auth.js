@@ -1,76 +1,16 @@
-import axios from 'axios';
+import api, {
+    csrf,
+    saveUser,
+    getStoredUser,
+    clearAuth,
+} from './api';
 
-const api = axios.create({
-    baseURL: '/api',
-
-    withCredentials: true,
-
-    headers: {
-        Accept: 'application/json',
-        'Content-Type': 'application/json',
-        'X-Requested-With': 'XMLHttpRequest',
-    },
-});
-
-
-/*
-|--------------------------------------------------------------------------
-| CSRF
-|--------------------------------------------------------------------------
-*/
-
-export async function csrf() {
-    return await axios.get('/sanctum/csrf-cookie', {
-        withCredentials: true,
-
-        headers: {
-            Accept: 'application/json',
-            'X-Requested-With': 'XMLHttpRequest',
-        },
-    });
-}
-
-
-/*
-|--------------------------------------------------------------------------
-| Axios Request Interceptor
-|--------------------------------------------------------------------------
-*/
-
-api.interceptors.request.use(
-    (config) => {
-        config.withCredentials = true;
-
-        return config;
-    },
-
-    (error) => {
-        return Promise.reject(error);
-    }
-);
-
-
-/*
-|--------------------------------------------------------------------------
-| Axios Response Interceptor
-|--------------------------------------------------------------------------
-*/
-
-api.interceptors.response.use(
-    (response) => {
-        return response;
-    },
-
-    (error) => {
-        console.error(
-            'API Error:',
-            error.response?.status || 'No Status',
-            error.response?.data || error.message
-        );
-
-        return Promise.reject(error);
-    }
-);
+export {
+    csrf,
+    saveUser,
+    getStoredUser,
+    clearAuth,
+};
 
 
 /*
@@ -96,37 +36,33 @@ export const register = async (data) => {
 
 /*
 |--------------------------------------------------------------------------
-| REGISTER OTP
+| REGISTRATION OTP
 |--------------------------------------------------------------------------
 */
 
-export const verifyRegistrationOtp = async (otp) => {
-    return api.post('/register/verify-otp', {
-        otp,
-    });
+export const verifyRegistrationOtp = async (
+    emailOrOtp,
+    otpMaybe
+) => {
+    const payload =
+        otpMaybe !== undefined
+            ? { email: emailOrOtp, otp: otpMaybe }
+            : { otp: emailOrOtp };
+
+    return api.post('/register/verify-otp', payload);
 };
-
-
-/*
-|--------------------------------------------------------------------------
-| RESEND REGISTER OTP
-|--------------------------------------------------------------------------
-*/
 
 export const resendRegistrationOtp = async (email = null) => {
-    const data = {};
-
-    if (email) {
-        data.email = email;
-    }
-
-    return api.post('/register/resend-otp', data);
+    return api.post(
+        '/register/resend-otp',
+        email ? { email } : {}
+    );
 };
 
 
 /*
 |--------------------------------------------------------------------------
-| LOGIN
+| LOGIN / LOGOUT
 |--------------------------------------------------------------------------
 */
 
@@ -139,116 +75,63 @@ export const login = async (email, password) => {
     });
 };
 
-
-/*
-|--------------------------------------------------------------------------
-| CURRENT USER
-|--------------------------------------------------------------------------
-*/
-
 export const getUser = async () => {
     return api.get('/user');
 };
-
-
-/*
-|--------------------------------------------------------------------------
-| LOGOUT
-|--------------------------------------------------------------------------
-*/
 
 export const logout = async () => {
     try {
         return await api.post('/logout');
     } finally {
-        localStorage.removeItem('auth_user');
-        localStorage.removeItem('registration_email');
-        localStorage.removeItem('password_reset_email');
+        clearAuth();
     }
 };
 
 
 /*
 |--------------------------------------------------------------------------
-| FORGOT PASSWORD
+| FORGOT PASSWORD / RESET
 |--------------------------------------------------------------------------
 */
 
 export const forgotPassword = async (email) => {
     await csrf();
 
-    return api.post('/forgot-password', {
-        email,
-    });
+    return api.post('/forgot-password', { email });
 };
 
+export const verifyPasswordResetOtp = async (
+    emailOrOtp,
+    otpMaybe
+) => {
+    const payload =
+        otpMaybe !== undefined
+            ? { email: emailOrOtp, otp: otpMaybe }
+            : { otp: emailOrOtp };
 
-/*
-|--------------------------------------------------------------------------
-| PASSWORD OTP
-|--------------------------------------------------------------------------
-*/
-
-export const verifyPasswordResetOtp = async (otp) => {
-    return api.post('/forgot-password/verify-otp', {
-        otp,
-    });
+    return api.post('/forgot-password/verify-otp', payload);
 };
-
-
-/*
-|--------------------------------------------------------------------------
-| PASSWORD OTP ALIAS
-|--------------------------------------------------------------------------
-| password-otp.vue can use verifyPasswordOtp
-|--------------------------------------------------------------------------
-*/
 
 export const verifyPasswordOtp = verifyPasswordResetOtp;
 
-
-/*
-|--------------------------------------------------------------------------
-| RESEND PASSWORD OTP
-|--------------------------------------------------------------------------
-*/
-
 export const resendPasswordResetOtp = async (email = null) => {
-    const data = {};
-
-    if (email) {
-        data.email = email;
-    }
-
-    return api.post('/forgot-password/resend-otp', data);
+    return api.post(
+        '/forgot-password/resend-otp',
+        email ? { email } : {}
+    );
 };
-
-
-/*
-|--------------------------------------------------------------------------
-| RESEND PASSWORD OTP ALIAS
-|--------------------------------------------------------------------------
-| password-otp.vue can use resendPasswordOtp
-|--------------------------------------------------------------------------
-*/
 
 export const resendPasswordOtp = resendPasswordResetOtp;
 
+export const resetPassword = async (payload, passwordConfirmation) => {
+    if (typeof payload === 'string') {
+        return api.post('/reset-password', {
+            password: payload,
+            password_confirmation: passwordConfirmation,
+        });
+    }
 
-/*
-|--------------------------------------------------------------------------
-| RESET PASSWORD
-|--------------------------------------------------------------------------
-*/
-
-export const resetPassword = async (
-    password,
-    passwordConfirmation
-) => {
-    return api.post('/reset-password', {
-        password,
-        password_confirmation: passwordConfirmation,
-    });
+    return api.post('/reset-password', payload);
 };
 
 
@@ -258,90 +141,16 @@ export const resetPassword = async (
 |--------------------------------------------------------------------------
 */
 
-export const changePassword = async (
-    currentPassword,
-    password,
-    passwordConfirmation
-) => {
-    return api.post('/profile/password', {
-        current_password: currentPassword,
-        password,
-        password_confirmation: passwordConfirmation,
-    });
+export const changePassword = async (data) => {
+    return api.post('/profile/password', data);
 };
-
-
-/*
-|--------------------------------------------------------------------------
-| UPDATE PASSWORD ALIAS
-|--------------------------------------------------------------------------
-| change-password.vue is using updatePassword
-|--------------------------------------------------------------------------
-*/
 
 export const updatePassword = changePassword;
 
 
 /*
 |--------------------------------------------------------------------------
-| SAVE USER
-|--------------------------------------------------------------------------
-*/
-
-export const saveUser = (user) => {
-    if (user) {
-        localStorage.setItem(
-            'auth_user',
-            JSON.stringify(user)
-        );
-    }
-};
-
-
-/*
-|--------------------------------------------------------------------------
-| GET STORED USER
-|--------------------------------------------------------------------------
-*/
-
-export const getStoredUser = () => {
-    const user = localStorage.getItem('auth_user');
-
-    if (!user) {
-        return null;
-    }
-
-    try {
-        return JSON.parse(user);
-    } catch (error) {
-        console.error(
-            'Invalid stored user:',
-            error
-        );
-
-        localStorage.removeItem('auth_user');
-
-        return null;
-    }
-};
-
-
-/*
-|--------------------------------------------------------------------------
-| CLEAR AUTH
-|--------------------------------------------------------------------------
-*/
-
-export const clearAuth = () => {
-    localStorage.removeItem('auth_user');
-    localStorage.removeItem('registration_email');
-    localStorage.removeItem('password_reset_email');
-};
-
-
-/*
-|--------------------------------------------------------------------------
-| EXPORT AXIOS
+| DEFAULT EXPORT
 |--------------------------------------------------------------------------
 */
 

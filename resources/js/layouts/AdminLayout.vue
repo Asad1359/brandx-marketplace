@@ -1,241 +1,177 @@
 <template>
-    <div class="admin-layout">
-
-        <!-- MOBILE OVERLAY -->
-        <div
-            v-if="sidebarOpen"
-            class="sidebar-overlay"
-            @click="sidebarOpen = false"
-        ></div>
-
+    <div class="user-layout">
 
         <!-- SIDEBAR -->
         <aside
-            class="admin-sidebar"
+            class="sidebar"
             :class="{ 'sidebar-open': sidebarOpen }"
         >
-
             <!-- BRAND -->
             <div class="brand">
-                <div class="brand-name">
-                    BrandX
+                <div class="brand-icon">
+                    <i class="fa-solid fa-cube"></i>
                 </div>
 
-                <div class="brand-label">
-                    Admin Panel
+                <span>BrandX</span>
+            </div>
+
+            <!-- USER INFO -->
+            <div class="user-info">
+                <div class="avatar">
+                    {{ userInitial }}
+                </div>
+
+                <div class="user-details">
+                    <strong>{{ userName }}</strong>
+                    <small>{{ userEmail }}</small>
                 </div>
             </div>
 
-
-            <!-- ADMIN PROFILE -->
-            <router-link
-                to="/admin/profile"
-                class="admin-mini-profile"
-                @click="sidebarOpen = false"
-            >
-
-                <div class="admin-avatar">
-                    {{ getInitial(adminName) }}
-                </div>
-
-                <div class="admin-info">
-                    <strong>{{ adminName }}</strong>
-                    <span>Administrator</span>
-                </div>
-
-            </router-link>
-
-
-            <!-- MAIN NAVIGATION -->
-            <div class="nav-section">
-
-                <div class="nav-title">
-                    MAIN
-                </div>
-
+            <!-- NAVIGATION -->
+            <nav class="sidebar-nav">
 
                 <!-- DASHBOARD -->
                 <router-link
-                    to="/admin/dashboard"
+                    :to="{ name: 'user.dashboard' }"
                     class="nav-item"
-                    :class="{
-                        active: isActive('/admin/dashboard')
-                    }"
-                    @click="sidebarOpen = false"
+                    @click="closeSidebar"
                 >
-                    <i class="fa-solid fa-chart-line"></i>
+                    <i class="fa-solid fa-gauge-high"></i>
                     <span>Dashboard</span>
                 </router-link>
 
-
-                <!-- USERS -->
+                <!-- MARKETPLACE -->
                 <router-link
-                    to="/admin/users"
+                    :to="{ name: 'user.marketplace' }"
                     class="nav-item"
-                    :class="{
-                        active: isActive('/admin/users')
-                    }"
-                    @click="sidebarOpen = false"
+                    @click="closeSidebar"
                 >
-                    <i class="fa-solid fa-users"></i>
-                    <span>Users</span>
+                    <i class="fa-solid fa-store"></i>
+                    <span>Marketplace</span>
                 </router-link>
-
-
-                <!-- BAGS -->
-                <router-link
-                    to="/admin/bags"
-                    class="nav-item"
-                    :class="{
-                        active: isActive('/admin/bags')
-                    }"
-                    @click="sidebarOpen = false"
-                >
-                    <i class="fa-solid fa-bag-shopping"></i>
-                    <span>Bags</span>
-                </router-link>
-
-
-                <!-- ADD BAG -->
-                <router-link
-                    to="/admin/bags/create"
-                    class="nav-item"
-                    :class="{
-                        active: isActive('/admin/bags/create')
-                    }"
-                    @click="sidebarOpen = false"
-                >
-                    <i class="fa-solid fa-plus"></i>
-                    <span>Add Bag</span>
-                </router-link>
-
-            </div>
-
-
-            <!-- ACCOUNT -->
-            <div class="nav-section">
-
-                <div class="nav-title">
-                    ACCOUNT
-                </div>
-
 
                 <!-- PROFILE -->
                 <router-link
-                    to="/admin/profile"
+                    :to="{ name: 'user.profile' }"
                     class="nav-item"
-                    :class="{
-                        active: isActive('/admin/profile')
-                    }"
-                    @click="sidebarOpen = false"
+                    @click="closeSidebar"
                 >
                     <i class="fa-solid fa-user"></i>
                     <span>Profile</span>
                 </router-link>
 
-
-                <!-- PASSWORD -->
-                <router-link
-                    to="/admin/change-password"
-                    class="nav-item"
-                    :class="{
-                        active: isActive('/admin/change-password')
-                    }"
-                    @click="sidebarOpen = false"
-                >
-                    <i class="fa-solid fa-lock"></i>
-                    <span>Password</span>
-                </router-link>
-
-
                 <!-- THEME -->
                 <router-link
-                    to="/admin/theme"
+                    :to="{ name: 'user.theme' }"
                     class="nav-item"
-                    :class="{
-                        active: isActive('/admin/theme')
-                    }"
-                    @click="sidebarOpen = false"
+                    @click="closeSidebar"
                 >
                     <i class="fa-solid fa-palette"></i>
                     <span>Theme</span>
                 </router-link>
 
-            </div>
-
-
-            <!-- LOGOUT -->
-            <button
-                type="button"
-                class="logout-btn"
-                @click="handleLogout"
-            >
-                <i class="fa-solid fa-right-from-bracket"></i>
-                <span>Logout</span>
-            </button>
-
-        </aside>
-
-
-        <!-- RIGHT SIDE -->
-        <div class="admin-main">
-
-            <!-- HEADER -->
-            <header class="admin-header">
-
-                <!-- MOBILE MENU -->
-                <button
-                    type="button"
-                    class="mobile-menu"
-                    @click="sidebarOpen = true"
+                <!-- PASSWORD -->
+                <router-link
+                    :to="{ name: 'user.change-password' }"
+                    class="nav-item"
+                    @click="closeSidebar"
                 >
-                    <i class="fa-solid fa-bars"></i>
+                    <i class="fa-solid fa-lock"></i>
+                    <span>Password</span>
+                </router-link>
+
+            </nav>
+
+            <!-- SIDEBAR BOTTOM -->
+            <div class="sidebar-bottom">
+
+                <button
+                    class="logout-btn"
+                    @click="handleLogout"
+                    :disabled="loggingOut"
+                >
+                    <i
+                        class="fa-solid"
+                        :class="
+                            loggingOut
+                                ? 'fa-spinner fa-spin'
+                                : 'fa-right-from-bracket'
+                        "
+                    ></i>
+
+                    <span>
+                        {{
+                            loggingOut
+                                ? 'Logging out...'
+                                : 'Logout'
+                        }}
+                    </span>
                 </button>
 
+            </div>
+        </aside>
 
-                <!-- HEADER LEFT -->
+        <!-- MOBILE OVERLAY -->
+        <div
+            v-if="sidebarOpen"
+            class="sidebar-overlay"
+            @click="closeSidebar"
+        ></div>
+
+        <!-- MAIN -->
+        <div class="main-wrapper">
+
+            <!-- HEADER -->
+            <header class="top-header">
+
                 <div class="header-left">
 
-                    <h1>
-                        Admin Dashboard
-                    </h1>
+                    <button
+                        class="menu-btn"
+                        @click="toggleSidebar"
+                    >
+                        <i class="fa-solid fa-bars"></i>
+                    </button>
 
-                    <p>
-                        Manage your website from one place
-                    </p>
+                    <div>
+                        <h1>{{ pageTitle }}</h1>
+
+                        <p>
+                            Welcome to your account
+                        </p>
+                    </div>
 
                 </div>
 
-
-                <!-- HEADER PROFILE -->
-                <router-link
-                    to="/admin/profile"
-                    class="header-profile"
-                >
-
-                    <div class="header-avatar">
-                        {{ getInitial(adminName) }}
-                    </div>
+                <!-- HEADER USER -->
+                <div class="header-right">
 
                     <div class="header-user">
 
-                        <strong>
-                            {{ adminName }}
-                        </strong>
+                        <div class="header-avatar">
+                            {{ userInitial }}
+                        </div>
 
-                        <span>
-                            Admin
-                        </span>
+                        <div class="header-user-info">
+
+                            <strong>
+                                {{ userName }}
+                            </strong>
+
+                            <small>
+                                User Account
+                            </small>
+
+                        </div>
 
                     </div>
 
-                </router-link>
+                </div>
 
             </header>
 
-
-            <!-- CHILD ROUTES -->
-            <main class="admin-content">
+            <!-- PAGE CONTENT -->
+            <main class="main-content">
                 <router-view />
             </main>
 
@@ -244,72 +180,97 @@
     </div>
 </template>
 
-
 <script setup>
-import { computed, ref } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+import {
+    computed,
+    ref,
+    onMounted
+} from 'vue';
+
+import {
+    useRoute,
+    useRouter
+} from 'vue-router';
 
 import {
     authState,
+    loadUser,
     logout
 } from '../stores/auth';
-
 
 const router = useRouter();
 const route = useRoute();
 
 const sidebarOpen = ref(false);
-
+const loggingOut = ref(false);
 
 /*
 |--------------------------------------------------------------------------
-| ADMIN NAME
+| USER
 |--------------------------------------------------------------------------
 */
 
-const adminName = computed(() => {
-    return authState.user?.name || 'Admin';
+const user = computed(() => {
+    return authState.user || {};
 });
 
+const userName = computed(() => {
+    return user.value.name || 'User';
+});
 
-/*
-|--------------------------------------------------------------------------
-| GET INITIAL
-|--------------------------------------------------------------------------
-*/
+const userEmail = computed(() => {
+    return user.value.email || '';
+});
 
-function getInitial(name) {
-    return String(name || 'A')
+const userInitial = computed(() => {
+    return userName.value
         .charAt(0)
         .toUpperCase();
-}
-
+});
 
 /*
 |--------------------------------------------------------------------------
-| ACTIVE NAVIGATION
+| PAGE TITLE
 |--------------------------------------------------------------------------
 */
 
-function isActive(path) {
+const pageTitle = computed(() => {
 
-    /*
-    |--------------------------------------------------------------------------
-    | Bags main link should NOT stay active on /bags/create
-    |--------------------------------------------------------------------------
-    */
+    const titles = {
 
-    if (path === '/admin/bags') {
-        return route.path === '/admin/bags';
-    }
+        'user.dashboard':
+            'Dashboard',
 
+        'user.marketplace':
+            'Marketplace',
 
-    return (
-        route.path === path ||
-        route.path.startsWith(path + '/')
-    );
+        'user.profile':
+            'Profile',
+
+        'user.theme':
+            'Theme',
+
+        'user.change-password':
+            'Change Password',
+    };
+
+    return titles[route.name] || 'Dashboard';
+});
+
+/*
+|--------------------------------------------------------------------------
+| SIDEBAR
+|--------------------------------------------------------------------------
+*/
+
+function toggleSidebar() {
+    sidebarOpen.value =
+        !sidebarOpen.value;
 }
 
+function closeSidebar() {
+    sidebarOpen.value = false;
+}
 
 /*
 |--------------------------------------------------------------------------
@@ -319,334 +280,317 @@ function isActive(path) {
 
 async function handleLogout() {
 
+    if (loggingOut.value) {
+        return;
+    }
+
+    loggingOut.value = true;
+
     try {
+
         await logout();
+
     } catch (error) {
-        console.error('Logout error:', error);
+
+        console.error(
+            'Logout error:',
+            error
+        );
+
     } finally {
+
+        loggingOut.value = false;
+
+        sidebarOpen.value = false;
 
         router.push({
             name: 'login'
         });
-
     }
 }
+
+/*
+|--------------------------------------------------------------------------
+| LOAD USER
+|--------------------------------------------------------------------------
+*/
+
+onMounted(async () => {
+
+    try {
+
+        if (!authState.initialized) {
+            await loadUser();
+        }
+
+    } catch (error) {
+
+        console.error(
+            'User layout error:',
+            error
+        );
+    }
+});
 </script>
 
-
 <style scoped>
-
 * {
     box-sizing: border-box;
 }
 
-
-/* =========================================================
-   ADMIN LAYOUT
-========================================================= */
-
-.admin-layout {
+.user-layout {
     min-height: 100vh;
-
-    display: flex;
-
-    background: #f7f8fa;
+    background: #f5f7fb;
 }
-
 
 /* =========================================================
    SIDEBAR
 ========================================================= */
 
-.admin-sidebar {
+.sidebar {
     position: fixed;
-
     top: 0;
     left: 0;
-    bottom: 0;
-
-    width: 260px;
-
+    width: 250px;
+    height: 100vh;
+    background: #111827;
+    color: white;
     z-index: 1000;
 
     display: flex;
     flex-direction: column;
 
-    padding: 24px 16px;
-
-    background: #111827;
-
-    color: white;
-
-    overflow-y: auto;
+    transition: transform 0.3s ease;
 }
 
-
-/* =========================================================
-   BRAND
-========================================================= */
+/* BRAND */
 
 .brand {
-    padding: 0 12px 25px;
+    height: 72px;
+    padding: 0 22px;
 
-    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
 
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    border-bottom:
+        1px solid rgba(255,255,255,0.08);
 }
 
-.brand-name {
+.brand-icon {
+    width: 38px;
+    height: 38px;
+
+    border-radius: 10px;
+
+    background: #2563eb;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    font-size: 17px;
+}
+
+.brand span {
     font-size: 21px;
-
-    font-weight: 800;
-
-    letter-spacing: -0.4px;
+    font-weight: 700;
 }
 
-.brand-label {
+/* USER INFO */
+
+.user-info {
+    padding: 22px 18px;
+
+    display: flex;
+    align-items: center;
+    gap: 12px;
+
+    border-bottom:
+        1px solid rgba(255,255,255,0.08);
+}
+
+.avatar,
+.header-avatar {
+    width: 42px;
+    height: 42px;
+
+    border-radius: 50%;
+
+    background: #2563eb;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    font-weight: 700;
+    color: white;
+}
+
+.user-details {
+    min-width: 0;
+
+    display: flex;
+    flex-direction: column;
+}
+
+.user-details strong {
+    font-size: 14px;
+
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.user-details small {
     margin-top: 3px;
 
     color: #9ca3af;
 
     font-size: 11px;
-}
-
-
-/* =========================================================
-   ADMIN PROFILE
-========================================================= */
-
-.admin-mini-profile {
-    display: flex;
-
-    align-items: center;
-
-    gap: 11px;
-
-    padding: 10px 11px;
-
-    margin-bottom: 24px;
-
-    border-radius: 10px;
-
-    text-decoration: none;
-
-    color: white;
-
-    background: rgba(255, 255, 255, 0.05);
-
-    transition: 0.18s ease;
-}
-
-.admin-mini-profile:hover {
-    background: rgba(255, 255, 255, 0.09);
-}
-
-.admin-avatar {
-    width: 38px;
-    height: 38px;
-
-    min-width: 38px;
-
-    display: flex;
-
-    align-items: center;
-    justify-content: center;
-
-    border-radius: 9px;
-
-    background: #374151;
-
-    color: white;
-
-    font-size: 13px;
-
-    font-weight: 700;
-}
-
-.admin-info {
-    min-width: 0;
-}
-
-.admin-info strong {
-    display: block;
-
-    color: white;
-
-    font-size: 12px;
 
     white-space: nowrap;
-
     overflow: hidden;
-
     text-overflow: ellipsis;
 }
-
-.admin-info span {
-    display: block;
-
-    margin-top: 2px;
-
-    color: #9ca3af;
-
-    font-size: 10px;
-}
-
 
 /* =========================================================
    NAVIGATION
 ========================================================= */
 
-.nav-section {
-    margin-bottom: 22px;
-}
+.sidebar-nav {
+    padding: 18px 12px;
 
-.nav-title {
-    padding: 0 12px;
+    display: flex;
+    flex-direction: column;
 
-    margin-bottom: 8px;
+    gap: 5px;
 
-    color: #6b7280;
-
-    font-size: 9px;
-
-    font-weight: 800;
-
-    letter-spacing: 1.3px;
+    overflow-y: auto;
 }
 
 .nav-item {
-    display: flex;
+    height: 46px;
 
+    padding: 0 15px;
+
+    display: flex;
     align-items: center;
 
-    gap: 12px;
+    gap: 13px;
 
-    min-height: 40px;
+    border-radius: 9px;
 
-    padding: 0 12px;
-
-    margin-bottom: 3px;
-
-    border-radius: 8px;
-
-    color: #9ca3af;
+    color: #cbd5e1;
 
     text-decoration: none;
 
-    font-size: 12px;
+    font-size: 14px;
 
-    transition: 0.18s ease;
+    transition: 0.2s;
 }
 
 .nav-item i {
-    width: 17px;
+    width: 20px;
 
     text-align: center;
-
-    font-size: 12px;
 }
 
 .nav-item:hover {
+    background: #1f2937;
     color: white;
-
-    background: rgba(255, 255, 255, 0.06);
 }
 
-.nav-item.active {
+.nav-item.router-link-active {
+    background: #2563eb;
     color: white;
-
-    background: rgba(255, 255, 255, 0.1);
-
-    font-weight: 600;
 }
-
 
 /* =========================================================
-   LOGOUT
+   SIDEBAR BOTTOM
 ========================================================= */
+
+.sidebar-bottom {
+    margin-top: auto;
+
+    padding: 15px 12px;
+
+    border-top:
+        1px solid rgba(255,255,255,0.08);
+}
 
 .logout-btn {
     width: 100%;
-
-    display: flex;
-
-    align-items: center;
-
-    gap: 12px;
-
-    min-height: 40px;
-
-    padding: 0 12px;
-
-    margin-top: auto;
+    height: 45px;
 
     border: 0;
+    border-radius: 9px;
 
-    border-radius: 8px;
+    background: #1f2937;
 
-    background: transparent;
-
-    color: #9ca3af;
-
-    font-size: 12px;
+    color: #fca5a5;
 
     cursor: pointer;
 
-    text-align: left;
+    display: flex;
+    align-items: center;
 
-    transition: 0.18s ease;
+    justify-content: flex-start;
+
+    gap: 13px;
+
+    padding: 0 15px;
+
+    font-size: 14px;
 }
 
 .logout-btn:hover {
-    background: rgba(255, 255, 255, 0.06);
-
-    color: white;
+    background: #374151;
 }
 
-.logout-btn i {
-    width: 17px;
-
-    text-align: center;
+.logout-btn:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
 }
-
 
 /* =========================================================
-   MAIN AREA
+   MAIN
 ========================================================= */
 
-.admin-main {
-    width: calc(100% - 260px);
-
+.main-wrapper {
+    margin-left: 250px;
     min-height: 100vh;
-
-    margin-left: 260px;
 }
-
 
 /* =========================================================
    HEADER
 ========================================================= */
 
-.admin-header {
-    height: 78px;
-
-    display: flex;
-
-    align-items: center;
-
-    justify-content: space-between;
-
-    padding: 0 32px;
+.top-header {
+    height: 72px;
 
     background: white;
 
-    border-bottom: 1px solid #e5e7eb;
+    border-bottom:
+        1px solid #e5e7eb;
+
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+
+    padding: 0 30px;
 
     position: sticky;
-
     top: 0;
 
-    z-index: 100;
+    z-index: 900;
+}
+
+.header-left {
+    display: flex;
+    align-items: center;
+
+    gap: 15px;
 }
 
 .header-left h1 {
@@ -654,198 +598,248 @@ async function handleLogout() {
 
     color: #111827;
 
-    font-size: 17px;
+    font-size: 20px;
 
-    font-weight: 750;
+    font-weight: 700;
 }
 
 .header-left p {
     margin: 3px 0 0;
 
-    color: #9ca3af;
+    color: #6b7280;
 
-    font-size: 11px;
+    font-size: 12px;
 }
 
-.header-profile {
-    display: flex;
+.menu-btn {
+    display: none;
 
-    align-items: center;
-
-    gap: 9px;
-
-    text-decoration: none;
-
-    color: inherit;
-}
-
-.header-avatar {
-    width: 35px;
-    height: 35px;
-
-    display: flex;
-
-    align-items: center;
-    justify-content: center;
-
-    border-radius: 9px;
+    border: 0;
 
     background: #f3f4f6;
 
-    color: #374151;
+    width: 40px;
+    height: 40px;
 
-    font-size: 12px;
+    border-radius: 8px;
 
-    font-weight: 700;
+    cursor: pointer;
+
+    font-size: 18px;
 }
 
-.header-user strong {
-    display: block;
+/* HEADER USER */
 
+.header-user {
+    display: flex;
+    align-items: center;
+
+    gap: 10px;
+}
+
+.header-avatar {
+    width: 38px;
+    height: 38px;
+
+    font-size: 14px;
+}
+
+.header-user-info {
+    display: flex;
+    flex-direction: column;
+}
+
+.header-user-info strong {
+    font-size: 13px;
     color: #111827;
+}
 
+.header-user-info small {
+    color: #6b7280;
     font-size: 11px;
 }
-
-.header-user span {
-    display: block;
-
-    margin-top: 1px;
-
-    color: #9ca3af;
-
-    font-size: 9px;
-}
-
 
 /* =========================================================
    CONTENT
 ========================================================= */
 
-.admin-content {
-    width: 100%;
+.main-content {
+    padding: 30px;
 
-    min-height: calc(100vh - 78px);
-
-    padding: 30px 32px;
-
-    background: #f7f8fa;
+    min-height:
+        calc(100vh - 72px);
 }
 
-
-/* =========================================================
-   MOBILE MENU
-========================================================= */
-
-.mobile-menu {
-    display: none;
-
-    width: 36px;
-    height: 36px;
-
-    margin-right: 12px;
-
-    border: 1px solid #e5e7eb;
-
-    border-radius: 8px;
-
-    background: white;
-
-    color: #374151;
-
-    cursor: pointer;
-}
-
-
-/* =========================================================
-   SIDEBAR OVERLAY
-========================================================= */
+/* OVERLAY */
 
 .sidebar-overlay {
     display: none;
 }
 
-
 /* =========================================================
-   TABLET / MOBILE
+   DARK MODE
 ========================================================= */
 
-@media (max-width: 900px) {
+:global(html.dark) .user-layout {
+    background: #0b0f17 !important;
+    color: #e5e7eb !important;
+}
 
-    .admin-sidebar {
-        transform: translateX(-100%);
+:global(html.dark) .sidebar {
+    background: #0f172a !important;
+    border-right: 1px solid #1f2937;
+}
 
-        transition: transform 0.25s ease;
+:global(html.dark) .brand {
+    border-bottom-color: #1f2937 !important;
+}
+
+:global(html.dark) .brand span {
+    color: #f9fafb !important;
+}
+
+:global(html.dark) .brand-icon {
+    background: #1d4ed8 !important;
+}
+
+:global(html.dark) .user-info {
+    border-bottom-color: #1f2937 !important;
+}
+
+:global(html.dark) .avatar,
+:global(html.dark) .header-avatar {
+    background: #1d4ed8 !important;
+    color: #ffffff !important;
+}
+
+:global(html.dark) .user-details strong {
+    color: #f9fafb !important;
+}
+
+:global(html.dark) .user-details small {
+    color: #94a3b8 !important;
+}
+
+:global(html.dark) .nav-item {
+    color: #cbd5e1 !important;
+}
+
+:global(html.dark) .nav-item i {
+    color: #94a3b8 !important;
+}
+
+:global(html.dark) .nav-item:hover {
+    background: #1f2937 !important;
+    color: #ffffff !important;
+}
+
+:global(html.dark) .nav-item.router-link-active {
+    background: #2563eb !important;
+    color: #ffffff !important;
+}
+
+:global(html.dark) .sidebar-bottom {
+    border-top-color: #1f2937 !important;
+}
+
+:global(html.dark) .logout-btn {
+    background: #1f2937 !important;
+    color: #fca5a5 !important;
+}
+
+:global(html.dark) .logout-btn:hover {
+    background: #334155 !important;
+}
+
+:global(html.dark) .main-wrapper {
+    background: #0b0f17 !important;
+}
+
+:global(html.dark) .top-header {
+    background: #111827 !important;
+    border-bottom-color: #1f2937 !important;
+}
+
+:global(html.dark) .header-left h1 {
+    color: #f9fafb !important;
+}
+
+:global(html.dark) .header-left p {
+    color: #94a3b8 !important;
+}
+
+:global(html.dark) .menu-btn {
+    background: #1e293b !important;
+    color: #e5e7eb !important;
+}
+
+:global(html.dark) .header-user-info strong {
+    color: #f9fafb !important;
+}
+
+:global(html.dark) .header-user-info small {
+    color: #94a3b8 !important;
+}
+
+:global(html.dark) .main-content {
+    background: #0b0f17 !important;
+    color: #e5e7eb !important;
+}
+
+:global(html.dark) .sidebar-overlay {
+    background: rgba(0, 0, 0, 0.7) !important;
+}
+
+/* =========================================================
+   RESPONSIVE
+========================================================= */
+
+@media (max-width: 768px) {
+
+    .sidebar {
+        transform:
+            translateX(-100%);
     }
 
-
-    .admin-sidebar.sidebar-open {
-        transform: translateX(0);
+    .sidebar.sidebar-open {
+        transform:
+            translateX(0);
     }
 
-
-    .admin-main {
-        width: 100%;
-
+    .main-wrapper {
         margin-left: 0;
     }
 
+    .menu-btn {
+        display: flex;
 
-    .mobile-menu {
-        display: block;
+        align-items: center;
+        justify-content: center;
     }
 
+    .header-user-info {
+        display: none;
+    }
 
-    .admin-header {
+    .top-header {
         padding: 0 18px;
     }
 
-
-    .admin-content {
-        padding: 22px 18px;
+    .main-content {
+        padding: 20px;
     }
 
-
     .sidebar-overlay {
+        display: block;
+
         position: fixed;
 
         inset: 0;
 
+        background:
+            rgba(0,0,0,0.45);
+
         z-index: 999;
-
-        display: block;
-
-        background: rgba(0, 0, 0, 0.45);
     }
-
-
-    .header-user {
-        display: none;
-    }
-
 }
-
-
-/* =========================================================
-   SMALL MOBILE
-========================================================= */
-
-@media (max-width: 600px) {
-
-    .header-left h1 {
-        font-size: 15px;
-    }
-
-
-    .header-left p {
-        display: none;
-    }
-
-
-    .admin-content {
-        padding: 18px 14px;
-    }
-
-}
-
 </style>

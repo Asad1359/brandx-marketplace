@@ -177,6 +177,11 @@
 
         </div>
 
+        <!-- =========================================================
+             FLOATING CHAT WIDGET
+             ========================================================= -->
+        <ChatWidget />
+
     </div>
 </template>
 
@@ -197,6 +202,8 @@ import {
     loadUser,
     logout
 } from '../stores/auth';
+
+import ChatWidget from '../components/ChatWidget.vue';
 
 const router = useRouter();
 const route = useRoute();
@@ -674,6 +681,136 @@ onMounted(async () => {
 
 .sidebar-overlay {
     display: none;
+}
+
+/* =========================================================
+   DARK MODE
+========================================================= */
+
+:global(html.dark) .user-layout {
+    background: #0b0f17 !important;
+    color: #e5e7eb !important;
+}
+
+:global(html.dark) .sidebar {
+    background: #0f172a !important;
+    border-right: 1px solid #1f2937;
+}
+
+:global(html.dark) .brand {
+    border-bottom-color: #1f2937 !important;
+}
+
+:global(html.dark) .brand span {
+    color: #f9fafb !important;
+}
+
+:global(html.dark) .brand-icon {
+    background: #1d4ed8 !important;
+}
+
+:global(html.dark) .user-info {
+    border-bottom-color: #1f2937 !important;
+}
+
+:global(html.dark) .avatar,
+:global(html.dark) .header-avatar {
+    background: #1d4ed8 !important;
+    color: #ffffff !important;
+}
+
+:global(html.dark) .user-details strong {
+    color: #f9fafb !important;
+}
+
+:global(html.dark) .user-details small {
+    color: #94a3b8 !important;
+}
+
+:global(html.dark) .nav-item {
+    color: #cbd5e1 !important;
+}
+
+:global(html.dark) .nav-item i {
+    color: #94a3b8 !important;
+}
+
+:global(html.dark) .nav-item:hover {
+    background: #1f2937 !important;
+    color: #ffffff !important;
+}
+
+:global(html.dark) .nav-item:hover i {
+    color: #ffffff !important;
+}
+
+:global(html.dark) .nav-item.router-link-active {
+    background: #2563eb !important;
+    color: #ffffff !important;
+}
+
+:global(html.dark) .nav-item.router-link-active i {
+    color: #ffffff !important;
+}
+
+:global(html.dark) .sidebar-bottom {
+    border-top-color: #1f2937 !important;
+}
+
+:global(html.dark) .logout-btn {
+    background: #1f2937 !important;
+    color: #fca5a5 !important;
+}
+
+:global(html.dark) .logout-btn i {
+    color: #f87171 !important;
+}
+
+:global(html.dark) .logout-btn:hover {
+    background: #334155 !important;
+}
+
+:global(html.dark) .main-wrapper {
+    background: #0b0f17 !important;
+}
+
+:global(html.dark) .top-header {
+    background: #111827 !important;
+    border-bottom-color: #1f2937 !important;
+}
+
+:global(html.dark) .header-left h1 {
+    color: #f9fafb !important;
+}
+
+:global(html.dark) .header-left p {
+    color: #94a3b8 !important;
+}
+
+:global(html.dark) .menu-btn {
+    background: #1e293b !important;
+    color: #e5e7eb !important;
+}
+
+:global(html.dark) .menu-btn:hover {
+    background: #334155 !important;
+}
+
+:global(html.dark) .header-user-info strong {
+    color: #f9fafb !important;
+}
+
+:global(html.dark) .header-user-info small {
+    color: #94a3b8 !important;
+}
+
+:global(html.dark) .main-content {
+    background: #0b0f17 !important;
+    color: #e5e7eb !important;
+}
+
+:global(html.dark) .sidebar-overlay {
+    background: rgba(0, 0, 0, 0.7) !important;
 }
 
 /* =========================================================

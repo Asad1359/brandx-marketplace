@@ -97,7 +97,8 @@ import { useRouter, useRoute } from 'vue-router';
 
 import {
     verifyRegistrationOtp,
-    resendRegistrationOtp
+    resendRegistrationOtp,
+    saveUser,
 } from '../../services/auth';
 
 const router = useRouter();
@@ -124,15 +125,7 @@ let countdownTimer = null;
 */
 
 onMounted(() => {
-    /*
-     * Email can come from:
-     * /register-otp?email=test@example.com
-     *
-     * or localStorage from registration.
-     */
-
     const routeEmail = route.query.email;
-
     const storedEmail = localStorage.getItem('registration_email');
 
     email.value = routeEmail || storedEmail || '';
@@ -186,29 +179,25 @@ async function verifyOtp() {
             otp.value
         );
 
-        if (response.success) {
+        const data = response.data || {};
+
+        if (data.success) {
 
             successMessage.value =
-                response.message || 'Email verified successfully.';
+                data.message || 'Email verified successfully.';
 
             /*
              * Save token if backend returned one.
              */
-            if (response.token) {
-                localStorage.setItem(
-                    'auth_token',
-                    response.token
-                );
+            if (data.token) {
+                localStorage.setItem('auth_token', data.token);
             }
 
             /*
              * Save user if returned.
              */
-            if (response.user) {
-                localStorage.setItem(
-                    'auth_user',
-                    JSON.stringify(response.user)
-                );
+            if (data.user) {
+                saveUser(data.user);
             }
 
             /*
@@ -221,8 +210,8 @@ async function verifyOtp() {
              */
             setTimeout(() => {
 
-                if (response.user?.role === 'admin') {
-                    router.push('/admindashboard');
+                if (data.user?.role === 'admin') {
+                    router.push('/admin/dashboard');
                 } else {
                     router.push('/');
                 }
@@ -230,12 +219,10 @@ async function verifyOtp() {
             }, 700);
 
         } else {
-            errorMessage.value =
-                response.message || 'Invalid OTP.';
+            errorMessage.value = data.message || 'Invalid OTP.';
         }
 
     } catch (error) {
-
         console.error('OTP verification error:', error);
 
         errorMessage.value =
@@ -270,28 +257,25 @@ async function resendOtp() {
     resending.value = true;
 
     try {
-        const response = await resendRegistrationOtp(
-            email.value
-        );
+        const response = await resendRegistrationOtp(email.value);
 
-        if (response.success) {
+        const data = response.data || {};
+
+        if (data.success) {
 
             successMessage.value =
-                response.message || 'A new OTP has been sent.';
+                data.message || 'A new OTP has been sent.';
 
             otp.value = '';
 
             startCountdown();
 
         } else {
-
             errorMessage.value =
-                response.message || 'Unable to resend OTP.';
-
+                data.message || 'Unable to resend OTP.';
         }
 
     } catch (error) {
-
         console.error('Resend OTP error:', error);
 
         errorMessage.value =
@@ -348,12 +332,10 @@ function goBack() {
 */
 
 onUnmounted(() => {
-
     if (countdownTimer) {
         clearInterval(countdownTimer);
         countdownTimer = null;
     }
-
 });
 </script>
 

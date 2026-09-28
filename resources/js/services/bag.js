@@ -5,60 +5,65 @@ import api from './api';
 | GET ALL BAGS
 |--------------------------------------------------------------------------
 */
-export async function getAll() {
+
+export const getAll = () => {
     return api.get('/bags');
-}
+};
 
 /*
 |--------------------------------------------------------------------------
 | GET SINGLE BAG
 |--------------------------------------------------------------------------
 */
-export async function get(id) {
+
+export const get = (id) => {
     return api.get(`/bags/${id}`);
-}
+};
 
 /*
 |--------------------------------------------------------------------------
 | GET SINGLE BAG - ALIAS
 |--------------------------------------------------------------------------
 */
-export async function getById(id) {
-    return api.get(`/bags/${id}`);
-}
+
+export const getById = get;
 
 /*
 |--------------------------------------------------------------------------
 | CREATE BAG
 |--------------------------------------------------------------------------
 */
-export async function create(data) {
+
+export const create = (data) => {
     return api.post('/bags', data);
-}
+};
 
 /*
 |--------------------------------------------------------------------------
 | UPDATE BAG
 |--------------------------------------------------------------------------
 */
-export async function update(id, data) {
-    return api.post(`/bags/${id}`, data);
-}
+
+export const update = (id, data) => {
+    return api.put(`/bags/${id}`, data);
+};
 
 /*
 |--------------------------------------------------------------------------
 | DELETE BAG
 |--------------------------------------------------------------------------
 */
-export async function remove(id) {
+
+export const remove = (id) => {
     return api.delete(`/bags/${id}`);
-}
+};
 
 /*
 |--------------------------------------------------------------------------
 | DEFAULT SERVICE
 |--------------------------------------------------------------------------
 */
+
 const bagService = {
     getAll,
     get,

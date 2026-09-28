@@ -549,6 +549,135 @@ onMounted(async () => {
 }
 
 /* =========================================================
+   DARK MODE
+========================================================= */
+
+:global(html.dark) .dashboard {
+    background: #0b0f17 !important;
+}
+
+/* WELCOME */
+
+:global(html.dark) .welcome-card {
+    background:
+        linear-gradient(
+            135deg,
+            #0f172a,
+            #1e3a8a
+        ) !important;
+
+    color: #f9fafb !important;
+}
+
+:global(html.dark) .badge {
+    background: rgba(255, 255, 255, 0.10) !important;
+    color: #c7d2fe !important;
+}
+
+:global(html.dark) .welcome-card h2 {
+    color: #f9fafb !important;
+}
+
+:global(html.dark) .welcome-card p {
+    color: #cbd5e1 !important;
+}
+
+:global(html.dark) .welcome-icon {
+    background: rgba(255, 255, 255, 0.10) !important;
+    color: #a5b4fc !important;
+}
+
+/* ACCOUNT CARD + ACTIONS CARD */
+
+:global(html.dark) .account-card,
+:global(html.dark) .actions-card {
+    background: #111827 !important;
+    border-color: #1f2937 !important;
+}
+
+:global(html.dark) .section-header h3,
+:global(html.dark) .section-title h3 {
+    color: #f9fafb !important;
+}
+
+:global(html.dark) .section-header p,
+:global(html.dark) .section-title p {
+    color: #94a3b8 !important;
+}
+
+:global(html.dark) .edit-btn {
+    background: rgba(37, 99, 235, 0.18) !important;
+    color: #93c5fd !important;
+}
+
+:global(html.dark) .edit-btn:hover {
+    background: rgba(37, 99, 235, 0.28) !important;
+}
+
+/* INFO BOXES */
+
+:global(html.dark) .info-box {
+    background: #0f172a !important;
+    border-color: #1f2937 !important;
+}
+
+:global(html.dark) .info-box span {
+    color: #94a3b8 !important;
+}
+
+:global(html.dark) .info-box strong {
+    color: #f9fafb !important;
+}
+
+:global(html.dark) .info-box strong.active {
+    color: #4ade80 !important;
+}
+
+:global(html.dark) .info-box strong.inactive {
+    color: #f87171 !important;
+}
+
+/* ACTION CARDS */
+
+:global(html.dark) .action-card {
+    background: #0f172a !important;
+    border-color: #1f2937 !important;
+}
+
+:global(html.dark) .action-card:hover {
+    border-color: #2563eb !important;
+    box-shadow:
+        0 8px 20px
+        rgba(37, 99, 235, 0.20) !important;
+}
+
+:global(html.dark) .action-icon {
+    background: rgba(37, 99, 235, 0.18) !important;
+    color: #93c5fd !important;
+}
+
+:global(html.dark) .action-card h4 {
+    color: #f9fafb !important;
+}
+
+:global(html.dark) .action-card p {
+    color: #94a3b8 !important;
+}
+
+:global(html.dark) .arrow {
+    color: #64748b !important;
+}
+
+:global(html.dark) .marketplace-card {
+    border-color: rgba(37, 99, 235, 0.35) !important;
+}
+
+:global(html.dark) .marketplace-card .action-icon {
+    background: #2563eb !important;
+    color: #ffffff !important;
+}
+
+/* =========================================================
    RESPONSIVE
 ========================================================= */
 

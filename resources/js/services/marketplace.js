@@ -6,9 +6,9 @@ import api from './api';
 |--------------------------------------------------------------------------
 */
 
-export async function getMarketplaceSearches() {
+export const getMarketplaceSearches = () => {
     return api.get('/marketplace');
-}
+};
 
 /*
 |--------------------------------------------------------------------------
@@ -16,7 +16,7 @@ export async function getMarketplaceSearches() {
 |--------------------------------------------------------------------------
 */
 
-export async function searchMarketplace(query) {
+export const searchMarketplace = (query) => {
     const cleanQuery = String(query || '').trim();
 
     if (!cleanQuery) {
@@ -26,7 +26,7 @@ export async function searchMarketplace(query) {
     return api.post('/marketplace/search', {
         query: cleanQuery,
     });
-}
+};
 
 /*
 |--------------------------------------------------------------------------
@@ -34,6 +34,6 @@ export async function searchMarketplace(query) {
 |--------------------------------------------------------------------------
 */
 
-export async function getMarketplaceStatus(id) {
+export const getMarketplaceStatus = (id) => {
     return api.get(`/marketplace/status/${id}`);
-}
+};

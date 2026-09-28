@@ -40,7 +40,6 @@
                                     : 'Show current password'
                             "
                         >
-                            <!-- SHOW EYE -->
                             <svg
                                 v-if="!showCurrent"
                                 xmlns="http://www.w3.org/2000/svg"
@@ -57,7 +56,6 @@
                                 <circle cx="12" cy="12" r="3" />
                             </svg>
 
-                            <!-- HIDE EYE -->
                             <svg
                                 v-else
                                 xmlns="http://www.w3.org/2000/svg"
@@ -111,7 +109,6 @@
                                     : 'Show new password'
                             "
                         >
-                            <!-- SHOW EYE -->
                             <svg
                                 v-if="!showPassword"
                                 xmlns="http://www.w3.org/2000/svg"
@@ -128,7 +125,6 @@
                                 <circle cx="12" cy="12" r="3" />
                             </svg>
 
-                            <!-- HIDE EYE -->
                             <svg
                                 v-else
                                 xmlns="http://www.w3.org/2000/svg"
@@ -188,7 +184,6 @@
                                     : 'Show confirmation password'
                             "
                         >
-                            <!-- SHOW EYE -->
                             <svg
                                 v-if="!showConfirmation"
                                 xmlns="http://www.w3.org/2000/svg"
@@ -205,7 +200,6 @@
                                 <circle cx="12" cy="12" r="3" />
                             </svg>
 
-                            <!-- HIDE EYE -->
                             <svg
                                 v-else
                                 xmlns="http://www.w3.org/2000/svg"
@@ -301,7 +295,7 @@
 
 <script setup>
 import { ref, reactive } from 'vue';
-import { updatePassword } from '../../services/auth';
+import { changePassword as changePasswordApi } from '../../services/auth';
 
 
 /*
@@ -350,12 +344,6 @@ async function changePassword() {
     successMessage.value = '';
     errorMessage.value = '';
 
-    /*
-    |----------------------------------------------------------------------
-    | VALIDATION
-    |----------------------------------------------------------------------
-    */
-
     if (!form.current_password) {
         errorMessage.value =
             'Please enter your current password.';
@@ -386,47 +374,18 @@ async function changePassword() {
         return;
     }
 
-
-    /*
-    |----------------------------------------------------------------------
-    | LOADING
-    |----------------------------------------------------------------------
-    */
-
     loading.value = true;
 
-
     try {
-
-        /*
-        |------------------------------------------------------------------
-        | API REQUEST
-        |------------------------------------------------------------------
-        */
-
-        const response = await updatePassword({
+        const response = await changePasswordApi({
             current_password: form.current_password,
             password: form.password,
-            password_confirmation: form.password_confirmation
+            password_confirmation: form.password_confirmation,
         });
-
-
-        /*
-        |------------------------------------------------------------------
-        | SUCCESS
-        |------------------------------------------------------------------
-        */
 
         successMessage.value =
             response.data?.message ||
             'Password updated successfully.';
-
-
-        /*
-        |------------------------------------------------------------------
-        | CLEAR FORM
-        |------------------------------------------------------------------
-        */
 
         form.current_password = '';
         form.password = '';
@@ -437,15 +396,7 @@ async function changePassword() {
         showConfirmation.value = false;
 
     } catch (error) {
-
-        /*
-        |------------------------------------------------------------------
-        | VALIDATION ERRORS
-        |------------------------------------------------------------------
-        */
-
         if (error.response?.data?.errors) {
-
             const errors = error.response.data.errors;
 
             const firstError =
@@ -456,18 +407,14 @@ async function changePassword() {
             } else {
                 errorMessage.value = firstError;
             }
-
         } else {
-
             errorMessage.value =
                 error.response?.data?.message ||
                 'Unable to update password. Please try again.';
         }
 
     } finally {
-
         loading.value = false;
-
     }
 }
 </script>
@@ -480,13 +427,6 @@ async function changePassword() {
     padding: 30px;
     box-sizing: border-box;
 }
-
-
-/*
-|--------------------------------------------------------------------------
-| HEADER
-|--------------------------------------------------------------------------
-*/
 
 .page-header {
     margin-bottom: 25px;
@@ -505,13 +445,6 @@ async function changePassword() {
     color: #6b7280;
 }
 
-
-/*
-|--------------------------------------------------------------------------
-| CARD
-|--------------------------------------------------------------------------
-*/
-
 .password-card {
     width: 100%;
     max-width: 600px;
@@ -528,13 +461,6 @@ async function changePassword() {
     box-sizing: border-box;
 }
 
-
-/*
-|--------------------------------------------------------------------------
-| FORM GROUP
-|--------------------------------------------------------------------------
-*/
-
 .form-group {
     margin-bottom: 22px;
 }
@@ -549,13 +475,6 @@ async function changePassword() {
 
     color: #374151;
 }
-
-
-/*
-|--------------------------------------------------------------------------
-| PASSWORD INPUT
-|--------------------------------------------------------------------------
-*/
 
 .password-input-wrapper {
     position: relative;
@@ -595,13 +514,6 @@ async function changePassword() {
     box-shadow:
         0 0 0 3px rgba(99, 102, 241, 0.12);
 }
-
-
-/*
-|--------------------------------------------------------------------------
-| EYE BUTTON
-|--------------------------------------------------------------------------
-*/
 
 .eye-button {
     position: absolute;
@@ -654,13 +566,6 @@ async function changePassword() {
     pointer-events: none;
 }
 
-
-/*
-|--------------------------------------------------------------------------
-| SUCCESS
-|--------------------------------------------------------------------------
-*/
-
 .success-message {
     display: flex;
     align-items: center;
@@ -687,13 +592,6 @@ async function changePassword() {
     flex-shrink: 0;
 }
 
-
-/*
-|--------------------------------------------------------------------------
-| ERROR
-|--------------------------------------------------------------------------
-*/
-
 .error-message {
     display: flex;
     align-items: center;
@@ -719,13 +617,6 @@ async function changePassword() {
 
     flex-shrink: 0;
 }
-
-
-/*
-|--------------------------------------------------------------------------
-| UPDATE BUTTON
-|--------------------------------------------------------------------------
-*/
 
 .update-button {
     width: 100%;
@@ -756,15 +647,7 @@ async function changePassword() {
     cursor: not-allowed;
 }
 
-
-/*
-|--------------------------------------------------------------------------
-| MOBILE
-|--------------------------------------------------------------------------
-*/
-
 @media (max-width: 768px) {
-
     .page {
         padding: 20px;
     }
