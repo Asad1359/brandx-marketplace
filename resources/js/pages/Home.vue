@@ -17,13 +17,24 @@
                 </nav>
 
                 <div class="auth-buttons">
-                    <router-link to="/login" class="login-btn">
-                        Login
-                    </router-link>
+                    <template v-if="isAuthenticated">
+                        <router-link
+                            :to="userDashboardRoute"
+                            class="login-btn"
+                        >
+                            Dashboard
+                        </router-link>
+                    </template>
 
-                    <router-link to="/register" class="register-btn">
-                        Register
-                    </router-link>
+                    <template v-else>
+                        <router-link to="/login" class="login-btn">
+                            Login
+                        </router-link>
+
+                        <router-link to="/register" class="register-btn">
+                            Register
+                        </router-link>
+                    </template>
                 </div>
 
             </div>
@@ -434,13 +445,120 @@
             </div>
         </footer>
 
+
+        <!-- ================= GUEST FLOATING CHAT ================= -->
+        <transition name="chat-pop">
+            <button
+                v-if="!isAuthenticated"
+                class="guest-chat-button"
+                @click="openAuthModal"
+                aria-label="Chat with support"
+                type="button"
+            >
+                <!-- Chat bubble icon -->
+                <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="26"
+                    height="26"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                >
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                    <line x1="8" y1="10" x2="16" y2="10"/>
+                    <line x1="8" y1="14" x2="13" y2="14"/>
+                </svg>
+
+                <span class="guest-chat-tooltip">
+                    Chat with support
+                </span>
+
+                <span class="guest-chat-pulse"></span>
+            </button>
+        </transition>
+
+
+        <!-- ================= AUTH MODAL ================= -->
+        <transition name="modal-fade">
+            <div
+                v-if="showAuthModal"
+                class="modal-overlay"
+                @click.self="closeAuthModal"
+            >
+                <div class="auth-modal">
+
+                    <button
+                        class="modal-close"
+                        @click="closeAuthModal"
+                        aria-label="Close"
+                        type="button"
+                    >
+                        ×
+                    </button>
+
+                    <div class="modal-icon">
+                        <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="30"
+                            height="30"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            aria-hidden="true"
+                        >
+                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                            <line x1="8" y1="10" x2="16" y2="10"/>
+                            <line x1="8" y1="14" x2="13" y2="14"/>
+                        </svg>
+                    </div>
+
+                    <h2>Chat with Support</h2>
+
+                    <p class="modal-subtitle">
+                        Please login or create an account to start
+                        chatting with our support team.
+                    </p>
+
+                    <div class="modal-actions">
+                        <router-link
+                            to="/login"
+                            class="modal-btn modal-btn-primary"
+                        >
+                            Login
+                        </router-link>
+
+                        <router-link
+                            to="/register"
+                            class="modal-btn modal-btn-secondary"
+                        >
+                            Register
+                        </router-link>
+                    </div>
+
+                    <p class="modal-footnote">
+                        Live chat is available after login.
+                    </p>
+
+                </div>
+            </div>
+        </transition>
+
     </div>
 </template>
 
 
 <script setup>
-import { ref } from 'vue'
-import axios from 'axios'
+import { ref, computed } from 'vue';
+import axios from 'axios';
+
+import { authState } from '../stores/auth';
 
 
 /*
@@ -448,21 +566,55 @@ import axios from 'axios'
 | API
 |--------------------------------------------------------------------------
 */
-const API_BASE = 'http://127.0.0.1:8000'
+
+const API_BASE = 'http://127.0.0.1:8000';
+
+
+/*
+|--------------------------------------------------------------------------
+| Auth State
+|--------------------------------------------------------------------------
+*/
+
+const isAuthenticated = computed(() => {
+    return !!authState.user;
+});
+
+const userDashboardRoute = computed(() => {
+    return authState.user?.role === 'admin'
+        ? '/admin/dashboard'
+        : '/dashboard';
+});
+
+
+/*
+|--------------------------------------------------------------------------
+| Auth Modal
+|--------------------------------------------------------------------------
+*/
+
+const showAuthModal = ref(false);
+
+function openAuthModal() {
+    showAuthModal.value = true;
+    document.body.style.overflow = 'hidden';
+}
+
+function closeAuthModal() {
+    showAuthModal.value = false;
+    document.body.style.overflow = '';
+}
 
 
 /*
 |--------------------------------------------------------------------------
 | Marketplace Inputs
 |--------------------------------------------------------------------------
-|
-| Exactly 10 product inputs.
-|
 */
 
 const productInputs = ref(
     Array(10).fill('')
-)
+);
 
 
 /*
@@ -471,13 +623,13 @@ const productInputs = ref(
 |--------------------------------------------------------------------------
 */
 
-const isSearching = ref(false)
-const hasSearched = ref(false)
+const isSearching = ref(false);
+const hasSearched = ref(false);
 
-const categories = ref([])
+const categories = ref([]);
 
-const loadingStates = ref({})
-const errors = ref({})
+const loadingStates = ref({});
+const errors = ref({});
 
 
 /*
@@ -487,7 +639,7 @@ const errors = ref({})
 */
 
 const placeholderImage =
-    'https://via.placeholder.com/300x220?text=No+Image'
+    'https://via.placeholder.com/300x220?text=No+Image';
 
 
 /*
@@ -496,129 +648,68 @@ const placeholderImage =
 |--------------------------------------------------------------------------
 */
 
-const currentYear = new Date().getFullYear()
+const currentYear = new Date().getFullYear();
 
 
 /*
 |--------------------------------------------------------------------------
 | Search Products
 |--------------------------------------------------------------------------
-|
-| IMPORTANT:
-|
-| Search ONLY happens when the Search button is clicked.
-|
-| Typing inside the input does NOT call the API.
-|
 */
 
 const searchProducts = async () => {
 
     if (isSearching.value) {
-        return
+        return;
     }
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | Get entered products
-    |--------------------------------------------------------------------------
-    */
 
     const searches = productInputs.value
         .map(value => String(value || '').trim())
-        .filter(value => value.length > 0)
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | Nothing entered
-    |--------------------------------------------------------------------------
-    */
+        .filter(value => value.length > 0);
 
     if (!searches.length) {
-
-        alert('Please enter at least one product.')
-
-        return
+        alert('Please enter at least one product.');
+        return;
     }
 
-
-    /*
-    |--------------------------------------------------------------------------
-    | Reset previous results
-    |--------------------------------------------------------------------------
-    */
-
-    categories.value = []
-
-    loadingStates.value = {}
-
-    errors.value = {}
-
-    hasSearched.value = true
-
-    isSearching.value = true
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | Search products one by one
-    |--------------------------------------------------------------------------
-    */
+    categories.value = [];
+    loadingStates.value = {};
+    errors.value = {};
+    hasSearched.value = true;
+    isSearching.value = true;
 
     for (const query of searches) {
 
         const key =
-            `${query}-${Date.now()}-${Math.random()}`
-
+            `${query}-${Date.now()}-${Math.random()}`;
 
         categories.value.push({
             key,
             query,
             products: []
-        })
+        });
 
-        loadingStates.value[key] = true
-
-        errors.value[key] = null
-
+        loadingStates.value[key] = true;
+        errors.value[key] = null;
 
         try {
 
-            const searchId =
-                await startSearch(query)
-
+            const searchId = await startSearch(query);
 
             if (!searchId) {
-
                 throw new Error(
                     'Search ID was not returned by the server.'
-                )
+                );
             }
 
+            const products = await pollSearch(searchId);
 
-            /*
-            |--------------------------------------------------------------------------
-            | Wait for queue/job result
-            |--------------------------------------------------------------------------
-            */
-
-            const products =
-                await pollSearch(searchId)
-
-
-            const category =
-                categories.value.find(
-                    item => item.key === key
-                )
-
+            const category = categories.value.find(
+                item => item.key === key
+            );
 
             if (category) {
-
-                category.products =
-                    normalizeProducts(products)
-
+                category.products = normalizeProducts(products);
             }
 
         } catch (error) {
@@ -626,21 +717,17 @@ const searchProducts = async () => {
             console.error(
                 `Marketplace search failed for "${query}":`,
                 error
-            )
+            );
 
-
-            errors.value[key] =
-                getErrorMessage(error)
+            errors.value[key] = getErrorMessage(error);
 
         } finally {
-
-            loadingStates.value[key] = false
+            loadingStates.value[key] = false;
         }
     }
 
-
-    isSearching.value = false
-}
+    isSearching.value = false;
+};
 
 
 /*
@@ -653,9 +740,7 @@ const startSearch = async (query) => {
     try {
         const response = await axios.post(
             `${API_BASE}/api/marketplace/search`,
-            {
-                query: query
-            },
+            { query },
             {
                 withCredentials: true,
                 headers: {
@@ -663,14 +748,11 @@ const startSearch = async (query) => {
                     'Content-Type': 'application/json'
                 }
             }
-        )
+        );
 
-        console.log(
-            'Marketplace search response:',
-            response.data
-        )
+        console.log('Marketplace search response:', response.data);
 
-        const data = response.data
+        const data = response.data;
 
         return (
             data?.id ??
@@ -680,17 +762,13 @@ const startSearch = async (query) => {
             data?.data?.search_id ??
             data?.data?.search?.id ??
             null
-        )
+        );
 
     } catch (error) {
-        console.error(
-            'Start marketplace search error:',
-            error
-        )
-
-        throw error
+        console.error('Start marketplace search error:', error);
+        throw error;
     }
-}
+};
 
 
 /*
@@ -701,13 +779,9 @@ const startSearch = async (query) => {
 
 const pollSearch = async (searchId) => {
 
-    const maxAttempts = 90
+    const maxAttempts = 90;
 
-    for (
-        let attempt = 0;
-        attempt < maxAttempts;
-        attempt++
-    ) {
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
 
         try {
 
@@ -715,36 +789,20 @@ const pollSearch = async (searchId) => {
                 `${API_BASE}/api/marketplace/status/${searchId}`,
                 {
                     withCredentials: true,
-                    headers: {
-                        Accept: 'application/json'
-                    }
+                    headers: { Accept: 'application/json' }
                 }
-            )
+            );
 
+            const data = response.data;
 
-            const data = response.data
+            console.log(`Search status ${searchId}:`, data);
 
-
-            console.log(
-                `Search status ${searchId}:`,
-                data
-            )
-
-
-            const status =
-                String(
-                    data?.status ??
-                    data?.data?.status ??
-                    data?.search?.status ??
-                    ''
-                ).toLowerCase()
-
-
-            /*
-            |--------------------------------------------------------------------------
-            | Completed
-            |--------------------------------------------------------------------------
-            */
+            const status = String(
+                data?.status ??
+                data?.data?.status ??
+                data?.search?.status ??
+                ''
+            ).toLowerCase();
 
             if (
                 status === 'completed' ||
@@ -753,7 +811,6 @@ const pollSearch = async (searchId) => {
                 status === 'success' ||
                 status === 'successful'
             ) {
-
                 return (
                     data?.products ??
                     data?.results ??
@@ -762,65 +819,31 @@ const pollSearch = async (searchId) => {
                     data?.search?.products ??
                     data?.data ??
                     []
-                )
+                );
             }
 
-
-            /*
-            |--------------------------------------------------------------------------
-            | Failed
-            |--------------------------------------------------------------------------
-            */
-
-            if (
-                status === 'failed' ||
-                status === 'error'
-            ) {
-
+            if (status === 'failed' || status === 'error') {
                 throw new Error(
                     data?.message ??
                     data?.error ??
                     'Marketplace search failed.'
-                )
+                );
             }
-
 
         } catch (error) {
 
-            /*
-            |--------------------------------------------------------------------------
-            | Axios error
-            |--------------------------------------------------------------------------
-            */
-
-            if (
-                error?.response?.status === 404
-            ) {
-
-                throw new Error(
-                    'Search record was not found.'
-                )
+            if (error?.response?.status === 404) {
+                throw new Error('Search record was not found.');
             }
 
-
-            throw error
+            throw error;
         }
 
-
-        /*
-        |--------------------------------------------------------------------------
-        | Wait 2 seconds before checking again
-        |--------------------------------------------------------------------------
-        */
-
-        await sleep(2000)
+        await sleep(2000);
     }
 
-
-    throw new Error(
-        'Search timed out. Please try again.'
-    )
-}
+    throw new Error('Search timed out. Please try again.');
+};
 
 
 /*
@@ -830,14 +853,10 @@ const pollSearch = async (searchId) => {
 */
 
 const sleep = (milliseconds) => {
-
     return new Promise(
-        resolve => setTimeout(
-            resolve,
-            milliseconds
-        )
-    )
-}
+        resolve => setTimeout(resolve, milliseconds)
+    );
+};
 
 
 /*
@@ -848,81 +867,39 @@ const sleep = (milliseconds) => {
 
 const normalizeProducts = (data) => {
 
-    if (!data) {
-        return []
-    }
+    if (!data) return [];
 
+    if (Array.isArray(data)) return data;
 
-    if (Array.isArray(data)) {
-        return data
-    }
+    if (Array.isArray(data.products)) return data.products;
+    if (Array.isArray(data.results)) return data.results;
+    if (Array.isArray(data.data)) return data.data;
+    if (Array.isArray(data?.data?.products)) return data.data.products;
+    if (Array.isArray(data?.data?.results)) return data.data.results;
+    if (Array.isArray(data?.data?.data)) return data.data.data;
+    if (Array.isArray(data.marketplaces)) return data.marketplaces;
 
-
-    if (Array.isArray(data.products)) {
-        return data.products
-    }
-
-
-    if (Array.isArray(data.results)) {
-        return data.results
-    }
-
-
-    if (Array.isArray(data.data)) {
-        return data.data
-    }
-
-
-    if (Array.isArray(data?.data?.products)) {
-        return data.data.products
-    }
-
-
-    if (Array.isArray(data?.data?.results)) {
-        return data.data.results
-    }
-
-
-    if (Array.isArray(data?.data?.data)) {
-        return data.data.data
-    }
-
-
-    if (Array.isArray(data.marketplaces)) {
-        return data.marketplaces
-    }
-
-
-    return []
-}
+    return [];
+};
 
 
 /*
 |--------------------------------------------------------------------------
-| Product Name
+| Product Helpers
 |--------------------------------------------------------------------------
 */
 
 const getProductName = (product) => {
-
     return (
         product?.name ??
         product?.title ??
         product?.product_name ??
         product?.productTitle ??
         'Product'
-    )
-}
-
-
-/*
-|--------------------------------------------------------------------------
-| Product Image
-|--------------------------------------------------------------------------
-*/
+    );
+};
 
 const getProductImage = (product) => {
-
     return (
         product?.image ??
         product?.image_url ??
@@ -930,91 +907,51 @@ const getProductImage = (product) => {
         product?.thumbnail_url ??
         product?.imageUrl ??
         placeholderImage
-    )
-}
-
-
-/*
-|--------------------------------------------------------------------------
-| Product Price
-|--------------------------------------------------------------------------
-*/
+    );
+};
 
 const getProductPrice = (product) => {
-
     return (
         product?.price ??
         product?.current_price ??
         product?.sale_price ??
         product?.product_price ??
         ''
-    )
-}
-
-
-/*
-|--------------------------------------------------------------------------
-| Product Seller
-|--------------------------------------------------------------------------
-*/
+    );
+};
 
 const getProductSeller = (product) => {
-
     return (
         product?.seller ??
         product?.store ??
         product?.shop ??
         product?.marketplace ??
         ''
-    )
-}
-
-
-/*
-|--------------------------------------------------------------------------
-| Product Rating
-|--------------------------------------------------------------------------
-*/
+    );
+};
 
 const getProductRating = (product) => {
-
     return (
         product?.rating ??
         product?.ratings ??
         product?.review_rating ??
         ''
-    )
-}
-
-
-/*
-|--------------------------------------------------------------------------
-| Product URL
-|--------------------------------------------------------------------------
-*/
+    );
+};
 
 const getProductUrl = (product) => {
-
     return (
         product?.url ??
         product?.product_url ??
         product?.link ??
         product?.product_link ??
         ''
-    )
-}
-
-
-/*
-|--------------------------------------------------------------------------
-| Image Error
-|--------------------------------------------------------------------------
-*/
+    );
+};
 
 const handleImageError = (event) => {
-
-    event.target.src = placeholderImage
-}
+    event.target.src = placeholderImage;
+};
 
 
 /*
@@ -1025,52 +962,32 @@ const handleImageError = (event) => {
 
 const getErrorMessage = (error) => {
 
-    const status =
-        error?.response?.status
+    const status = error?.response?.status;
 
-
-    if (status === 401) {
-
-        return 'Authentication required.'
-    }
-
-
-    if (status === 419) {
-
-        return 'Session or CSRF token expired.'
-    }
-
-
-    if (status === 404) {
-
-        return 'Marketplace search route was not found.'
-    }
-
+    if (status === 401) return 'Authentication required.';
+    if (status === 419) return 'Session or CSRF token expired.';
+    if (status === 404) return 'Marketplace search route was not found.';
 
     if (status === 422) {
-
         return (
             error?.response?.data?.message ??
             'Invalid search request.'
-        )
+        );
     }
 
-
     if (status === 500) {
-
         return (
             error?.response?.data?.message ??
             'Server error occurred.'
-        )
+        );
     }
-
 
     return (
         error?.response?.data?.message ??
         error?.message ??
         'Unable to search marketplace.'
-    )
-}
+    );
+};
 </script>
 
 
@@ -1166,11 +1083,7 @@ const getErrorMessage = (error) => {
 
 .hero {
     padding: 100px 0;
-    background: linear-gradient(
-        135deg,
-        #eff6ff,
-        #ffffff
-    );
+    background: linear-gradient(135deg, #eff6ff, #ffffff);
 }
 
 .hero-content {
@@ -1454,9 +1367,7 @@ const getErrorMessage = (error) => {
 }
 
 @keyframes spin {
-    to {
-        transform: rotate(360deg);
-    }
+    to { transform: rotate(360deg); }
 }
 
 
@@ -1494,7 +1405,6 @@ const getErrorMessage = (error) => {
     margin: 0 0 10px;
     font-size: 15px;
     line-height: 1.5;
-
     display: -webkit-box;
     -webkit-line-clamp: 2;
     line-clamp: 2;
@@ -1621,6 +1531,330 @@ const getErrorMessage = (error) => {
 }
 
 
+/* =========================================================
+   GUEST FLOATING CHAT BUTTON
+========================================================= */
+
+.guest-chat-button {
+    position: fixed;
+    right: 24px;
+    bottom: 24px;
+    z-index: 9998;
+
+    width: 60px;
+    height: 60px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    border: none;
+    border-radius: 50%;
+
+    background: linear-gradient(135deg, #6366f1, #4f46e5);
+    color: #ffffff;
+
+    cursor: pointer;
+
+    box-shadow:
+        0 8px 24px rgba(99, 102, 241, 0.35),
+        0 0 0 0 rgba(99, 102, 241, 0.4);
+
+    transition:
+        transform 0.2s ease,
+        box-shadow 0.2s ease;
+}
+
+.guest-chat-button:hover {
+    transform: scale(1.06);
+
+    box-shadow:
+        0 12px 30px rgba(99, 102, 241, 0.45),
+        0 0 0 0 rgba(99, 102, 241, 0.4);
+}
+
+.guest-chat-button svg {
+    display: block;
+    width: 26px;
+    height: 26px;
+    pointer-events: none;
+    z-index: 2;
+}
+
+.guest-chat-tooltip {
+    position: absolute;
+    right: 74px;
+    top: 50%;
+    transform: translateY(-50%);
+
+    padding: 8px 14px;
+
+    background: #111827;
+    color: #ffffff;
+
+    font-size: 12px;
+    font-weight: 600;
+
+    border-radius: 8px;
+
+    white-space: nowrap;
+
+    opacity: 0;
+    pointer-events: none;
+
+    transition: opacity 0.2s ease;
+}
+
+.guest-chat-tooltip::after {
+    content: '';
+
+    position: absolute;
+    top: 50%;
+    left: 100%;
+
+    transform: translateY(-50%);
+
+    border: 6px solid transparent;
+    border-left-color: #111827;
+}
+
+.guest-chat-button:hover .guest-chat-tooltip {
+    opacity: 1;
+}
+
+/* Pulse ring */
+.guest-chat-pulse {
+    position: absolute;
+    inset: 0;
+
+    border-radius: 50%;
+
+    background: rgba(99, 102, 241, 0.5);
+
+    animation: guest-pulse 2s infinite;
+
+    z-index: 1;
+
+    pointer-events: none;
+}
+
+@keyframes guest-pulse {
+    0% {
+        transform: scale(1);
+        opacity: 0.6;
+    }
+
+    70% {
+        transform: scale(1.4);
+        opacity: 0;
+    }
+
+    100% {
+        transform: scale(1.4);
+        opacity: 0;
+    }
+}
+
+/* Pop-in transition */
+.chat-pop-enter-active {
+    transition: transform 0.3s ease, opacity 0.3s ease;
+}
+
+.chat-pop-leave-active {
+    transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.chat-pop-enter-from {
+    transform: scale(0.5);
+    opacity: 0;
+}
+
+.chat-pop-leave-to {
+    transform: scale(0.5);
+    opacity: 0;
+}
+
+
+/* =========================================================
+   AUTH MODAL
+========================================================= */
+
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+
+    z-index: 10000;
+
+    background: rgba(17, 24, 39, 0.55);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    padding: 20px;
+}
+
+.auth-modal {
+    position: relative;
+
+    width: 100%;
+    max-width: 420px;
+
+    padding: 36px 32px;
+
+    background: #ffffff;
+
+    border-radius: 20px;
+
+    box-shadow:
+        0 24px 60px rgba(0, 0, 0, 0.25);
+
+    text-align: center;
+}
+
+.modal-close {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+
+    width: 36px;
+    height: 36px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    border: none;
+    border-radius: 50%;
+
+    background: #f3f4f6;
+    color: #6b7280;
+
+    font-size: 22px;
+    line-height: 1;
+
+    cursor: pointer;
+
+    transition:
+        background 0.2s ease,
+        color 0.2s ease;
+}
+
+.modal-close:hover {
+    background: #e5e7eb;
+    color: #111827;
+}
+
+.modal-icon {
+    width: 72px;
+    height: 72px;
+
+    margin: 0 auto 20px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    border-radius: 50%;
+
+    background: linear-gradient(135deg, #eef2ff, #e0f2fe);
+    color: #4f46e5;
+}
+
+.modal-icon svg {
+    display: block;
+}
+
+.auth-modal h2 {
+    margin: 0 0 10px;
+
+    color: #111827;
+
+    font-size: 23px;
+    font-weight: 700;
+}
+
+.modal-subtitle {
+    margin: 0 0 28px;
+
+    color: #6b7280;
+
+    font-size: 14px;
+    line-height: 1.6;
+}
+
+.modal-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+
+    margin-bottom: 20px;
+}
+
+.modal-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    height: 48px;
+
+    border-radius: 10px;
+
+    font-size: 15px;
+    font-weight: 600;
+
+    text-decoration: none;
+
+    transition:
+        transform 0.15s ease,
+        box-shadow 0.15s ease,
+        background 0.2s ease;
+}
+
+.modal-btn-primary {
+    background: linear-gradient(135deg, #6366f1, #4f46e5);
+    color: #ffffff;
+
+    box-shadow: 0 6px 16px rgba(99, 102, 241, 0.28);
+}
+
+.modal-btn-primary:hover {
+    transform: translateY(-1px);
+
+    box-shadow: 0 8px 20px rgba(99, 102, 241, 0.4);
+}
+
+.modal-btn-secondary {
+    background: #f3f4f6;
+    color: #111827;
+}
+
+.modal-btn-secondary:hover {
+    background: #e5e7eb;
+}
+
+.modal-footnote {
+    margin: 0;
+
+    color: #9ca3af;
+
+    font-size: 12px;
+}
+
+/* Modal fade transition */
+.modal-fade-enter-active,
+.modal-fade-leave-active {
+    transition: opacity 0.25s ease;
+}
+
+.modal-fade-enter-from,
+.modal-fade-leave-to {
+    opacity: 0;
+}
+
+
 /* ================= RESPONSIVE ================= */
 
 @media (max-width: 1000px) {
@@ -1679,6 +1913,34 @@ const getErrorMessage = (error) => {
     .category-header {
         align-items: flex-start;
         flex-direction: column;
+    }
+}
+
+
+@media (max-width: 500px) {
+
+    .guest-chat-button {
+        width: 54px;
+        height: 54px;
+        right: 16px;
+        bottom: 16px;
+    }
+
+    .guest-chat-button svg {
+        width: 22px;
+        height: 22px;
+    }
+
+    .guest-chat-tooltip {
+        display: none;
+    }
+
+    .auth-modal {
+        padding: 30px 22px;
+    }
+
+    .auth-modal h2 {
+        font-size: 20px;
     }
 }
 
