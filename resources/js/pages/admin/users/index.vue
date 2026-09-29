@@ -263,7 +263,7 @@
                                                 ? 'Deactivate User'
                                                 : 'Activate User'
                                         "
-                                        @click="toggleStatus(user)"
+                                        @click="askToggleStatus(user)"
                                     >
                                         {{
                                             user.is_active
@@ -276,7 +276,7 @@
                                     <button
                                         class="action password"
                                         title="Generate New Password"
-                                        @click="changePassword(user)"
+                                        @click="askChangePassword(user)"
                                         :disabled="
                                             passwordLoadingId === user.id
                                         "
@@ -292,7 +292,7 @@
                                     <button
                                         class="action delete"
                                         title="Delete User"
-                                        @click="deleteUser(user)"
+                                        @click="askDelete(user)"
                                     >
                                         🗑
                                     </button>
@@ -494,8 +494,53 @@
 
         </div>
 
+        <!-- =====================================================
+             DELETE CONFIRMATION
+        ===================================================== -->
+        <ConfirmModal
+            v-model="showDeleteModal"
+            type="danger"
+            title="Delete User?"
+            :message="`Are you sure you want to permanently delete ${selectedUser?.name || 'this user'}? This action cannot be undone.`"
+            confirm-text="Delete"
+            cancel-text="Cancel"
+            :loading="deleting"
+            @confirm="confirmDelete"
+        />
+
+        <!-- =====================================================
+             STATUS TOGGLE CONFIRMATION
+        ===================================================== -->
+        <ConfirmModal
+            v-model="showStatusModal"
+            :type="statusAction === 'deactivate' ? 'warning' : 'success'"
+            :title="statusAction === 'deactivate' ? 'Deactivate User?' : 'Activate User?'"
+            :message="statusAction === 'deactivate'
+                ? `${selectedUser?.name || 'This user'} will not be able to log in until reactivated.`
+                : `${selectedUser?.name || 'This user'} will be able to log in again.`"
+            :confirm-text="statusAction === 'deactivate' ? 'Deactivate' : 'Activate'"
+            cancel-text="Cancel"
+            :loading="togglingStatus"
+            @confirm="confirmToggleStatus"
+        />
+
+        <!-- =====================================================
+             CHANGE PASSWORD CONFIRMATION
+        ===================================================== -->
+        <ConfirmModal
+            v-model="showPasswordModal"
+            type="warning"
+            title="Generate New Password?"
+            :message="`A new random password will be generated for ${selectedUser?.name || 'this user'} and sent to ${selectedUser?.email || 'their email'}.`"
+            confirm-text="Generate"
+            cancel-text="Cancel"
+            :loading="changingPassword"
+            @confirm="confirmChangePassword"
+        />
+
     </div>
 </template>
+
 
 <script setup>
 import {
@@ -512,6 +557,14 @@ import {
     toggleAdminUserStatus,
     changeAdminUserPassword,
 } from '../../../services/admin';
+
+import ConfirmModal from '../../../components/ConfirmModal.vue';
+
+/*
+|--------------------------------------------------------------------------
+| STATE
+|--------------------------------------------------------------------------
+*/
 
 const users = ref([]);
 
@@ -542,6 +595,23 @@ const form = reactive({
     password: '',
     password_confirmation: '',
 });
+
+/*
+|--------------------------------------------------------------------------
+| CONFIRM MODAL STATE
+|--------------------------------------------------------------------------
+*/
+
+const showDeleteModal = ref(false);
+const showStatusModal = ref(false);
+const showPasswordModal = ref(false);
+
+const selectedUser = ref(null);
+const statusAction = ref('deactivate');
+
+const deleting = ref(false);
+const togglingStatus = ref(false);
+const changingPassword = ref(false);
 
 /*
 |--------------------------------------------------------------------------
@@ -744,29 +814,40 @@ async function saveUser() {
 
 /*
 |--------------------------------------------------------------------------
-| Activate / Deactivate
+| Toggle Status — ask confirmation
 |--------------------------------------------------------------------------
 */
 
-async function toggleStatus(user) {
+function askToggleStatus(user) {
 
-    const action = user.is_active
+    selectedUser.value = user;
+
+    statusAction.value = user.is_active
         ? 'deactivate'
         : 'activate';
 
-    const confirmed = window.confirm(
-        `Are you sure you want to ${action} ${user.name}?`
-    );
+    showStatusModal.value = true;
+}
 
-    if (!confirmed) {
-        return;
-    }
+/*
+|--------------------------------------------------------------------------
+| Toggle Status — confirm
+|--------------------------------------------------------------------------
+*/
+
+async function confirmToggleStatus() {
+
+    if (!selectedUser.value) return;
+
+    togglingStatus.value = true;
 
     try {
 
         await toggleAdminUserStatus(
-            user.id
+            selectedUser.value.id
         );
+
+        showStatusModal.value = false;
 
         await loadUsers(
             pagination.current_page
@@ -783,27 +864,41 @@ async function toggleStatus(user) {
             err.response?.data?.message ||
             'Unable to change user status.'
         );
+
+    } finally {
+
+        togglingStatus.value = false;
+        selectedUser.value = null;
+
     }
 }
 
 /*
 |--------------------------------------------------------------------------
-| Change Password
+| Change Password — ask confirmation
 |--------------------------------------------------------------------------
 */
 
-async function changePassword(user) {
+function askChangePassword(user) {
 
-    const confirmed = window.confirm(
-        `Generate a new password for ${user.name}?\n\n` +
-        `The new password will be saved in the database ` +
-        `and sent to ${user.email}.`
-    );
+    selectedUser.value = user;
 
-    if (!confirmed) {
-        return;
-    }
+    showPasswordModal.value = true;
+}
 
+/*
+|--------------------------------------------------------------------------
+| Change Password — confirm
+|--------------------------------------------------------------------------
+*/
+
+async function confirmChangePassword() {
+
+    if (!selectedUser.value) return;
+
+    const user = selectedUser.value;
+
+    changingPassword.value = true;
     passwordLoadingId.value = user.id;
 
     try {
@@ -812,6 +907,8 @@ async function changePassword(user) {
             await changeAdminUserPassword(
                 user.id
             );
+
+        showPasswordModal.value = false;
 
         alert(
             response.data?.message ||
@@ -832,32 +929,45 @@ async function changePassword(user) {
 
     } finally {
 
+        changingPassword.value = false;
         passwordLoadingId.value = null;
+        selectedUser.value = null;
 
     }
 }
 
 /*
 |--------------------------------------------------------------------------
-| Delete User
+| Delete User — ask confirmation
 |--------------------------------------------------------------------------
 */
 
-async function deleteUser(user) {
+function askDelete(user) {
 
-    const confirmed = window.confirm(
-        `Are you sure you want to permanently delete ${user.name}?`
-    );
+    selectedUser.value = user;
 
-    if (!confirmed) {
-        return;
-    }
+    showDeleteModal.value = true;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Delete User — confirm
+|--------------------------------------------------------------------------
+*/
+
+async function confirmDelete() {
+
+    if (!selectedUser.value) return;
+
+    deleting.value = true;
 
     try {
 
         await deleteAdminUser(
-            user.id
+            selectedUser.value.id
         );
+
+        showDeleteModal.value = false;
 
         await loadUsers(
             pagination.current_page
@@ -874,6 +984,12 @@ async function deleteUser(user) {
             err.response?.data?.message ||
             'Unable to delete user.'
         );
+
+    } finally {
+
+        deleting.value = false;
+        selectedUser.value = null;
+
     }
 }
 
@@ -942,6 +1058,7 @@ onMounted(() => {
     loadUsers();
 });
 </script>
+
 
 <style scoped>
 .users-page {
