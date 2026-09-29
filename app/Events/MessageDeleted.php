@@ -9,7 +9,7 @@ use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 
-class MessageSent implements ShouldBroadcast
+class MessageDeleted implements ShouldBroadcast
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
@@ -27,30 +27,15 @@ class MessageSent implements ShouldBroadcast
 
     public function broadcastAs(): string
     {
-        return 'message.sent';
+        return 'message.deleted';
     }
 
     public function broadcastWith(): array
     {
-        $this->message->loadMissing('conversation');
-
         return [
             'id' => $this->message->id,
             'conversation_id' => $this->message->conversation_id,
             'user_id' => $this->message->conversation->user_id,
-            'sender_type' => $this->message->sender_type,
-            'sender_id' => $this->message->sender_id,
-            'message' => $this->message->message,
-            'is_read' => (bool) $this->message->is_read,
-            'attachment_url' => $this->message->attachment_url,
-            'attachment_name' => $this->message->attachment_name,
-            'attachment_type' => $this->message->attachment_type,
-            'attachment_size' => $this->message->attachment_size,
-            'is_image' => $this->message->is_image,
-            'is_video' => $this->message->is_video,
-            'is_audio' => $this->message->is_audio,
-            'is_pdf' => $this->message->is_pdf,
-            'created_at' => $this->message->created_at?->toISOString(),
         ];
     }
 }

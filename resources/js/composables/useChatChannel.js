@@ -4,8 +4,8 @@ import { ref, onMounted, onUnmounted } from 'vue';
 |--------------------------------------------------------------------------
 | WAIT FOR ECHO
 |--------------------------------------------------------------------------
-| Returns a promise that resolves once window.Echo is ready.
 */
+
 function waitForEcho(timeout = 5000) {
     return new Promise((resolve, reject) => {
         if (window.Echo) return resolve(window.Echo);
@@ -23,11 +23,13 @@ function waitForEcho(timeout = 5000) {
     });
 }
 
+
 /*
 |--------------------------------------------------------------------------
-| GET AUTH USER
+| AUTH USER
 |--------------------------------------------------------------------------
 */
+
 function getAuthUser() {
     try {
         return JSON.parse(localStorage.getItem('auth_user') || '{}');
@@ -36,12 +38,20 @@ function getAuthUser() {
     }
 }
 
+
 /*
 |--------------------------------------------------------------------------
 | USER CHAT CHANNEL
 |--------------------------------------------------------------------------
 */
-export function useUserChatChannel({ onMessage, onUnread } = {}) {
+
+export function useUserChatChannel({
+    onMessage,
+    onUnread,
+    onRead,
+    onDeleted,
+    onTyping,
+} = {}) {
     const connected = ref(false);
     let channel = null;
     let userId = null;
@@ -50,7 +60,7 @@ export function useUserChatChannel({ onMessage, onUnread } = {}) {
         const user = getAuthUser();
 
         if (!user?.id) {
-            console.warn('useUserChatChannel: no auth_user in localStorage.');
+            console.warn('useUserChatChannel: no auth_user.');
             return;
         }
 
@@ -66,6 +76,17 @@ export function useUserChatChannel({ onMessage, onUnread } = {}) {
                 })
                 .listen('.unread.count', (payload) => {
                     onUnread?.(payload.count);
+                })
+                .listen('.message.read', (payload) => {
+                    onRead?.(payload);
+                })
+                .listen('.message.deleted', (payload) => {
+                    onDeleted?.(payload);
+                })
+                .listen('.user.typing', (payload) => {
+                    if (payload.sender_type !== 'user') {
+                        onTyping?.(payload);
+                    }
                 });
 
             channel.subscribed(() => {
@@ -87,12 +108,20 @@ export function useUserChatChannel({ onMessage, onUnread } = {}) {
     return { connected };
 }
 
+
 /*
 |--------------------------------------------------------------------------
 | ADMIN CHAT CHANNEL
 |--------------------------------------------------------------------------
 */
-export function useAdminChatChannel({ onMessage, onNewConversation } = {}) {
+
+export function useAdminChatChannel({
+    onMessage,
+    onNewConversation,
+    onRead,
+    onDeleted,
+    onTyping,
+} = {}) {
     const connected = ref(false);
     let channel = null;
 
@@ -107,6 +136,17 @@ export function useAdminChatChannel({ onMessage, onNewConversation } = {}) {
                 })
                 .listen('.conversation.created', (payload) => {
                     onNewConversation?.(payload);
+                })
+                .listen('.message.read', (payload) => {
+                    onRead?.(payload);
+                })
+                .listen('.message.deleted', (payload) => {
+                    onDeleted?.(payload);
+                })
+                .listen('.user.typing', (payload) => {
+                    if (payload.sender_type !== 'admin') {
+                        onTyping?.(payload);
+                    }
                 });
 
             channel.subscribed(() => {

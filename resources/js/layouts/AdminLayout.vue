@@ -1,5 +1,5 @@
 <template>
-    <div class="user-layout">
+    <div class="admin-layout">
 
         <!-- SIDEBAR -->
         <aside
@@ -9,7 +9,7 @@
             <!-- BRAND -->
             <div class="brand">
                 <div class="brand-icon">
-                    <i class="fa-solid fa-cube"></i>
+                    <i class="fa-solid fa-shield-halved"></i>
                 </div>
 
                 <span>BrandX</span>
@@ -30,9 +30,8 @@
             <!-- NAVIGATION -->
             <nav class="sidebar-nav">
 
-                <!-- DASHBOARD -->
                 <router-link
-                    :to="{ name: 'user.dashboard' }"
+                    :to="{ name: 'admin.dashboard' }"
                     class="nav-item"
                     @click="closeSidebar"
                 >
@@ -40,19 +39,35 @@
                     <span>Dashboard</span>
                 </router-link>
 
-                <!-- MARKETPLACE -->
                 <router-link
-                    :to="{ name: 'user.marketplace' }"
+                    :to="{ name: 'admin.users' }"
                     class="nav-item"
                     @click="closeSidebar"
                 >
-                    <i class="fa-solid fa-store"></i>
-                    <span>Marketplace</span>
+                    <i class="fa-solid fa-users"></i>
+                    <span>Users</span>
                 </router-link>
 
-                <!-- PROFILE -->
                 <router-link
-                    :to="{ name: 'user.profile' }"
+                    :to="{ name: 'admin.bags' }"
+                    class="nav-item"
+                    @click="closeSidebar"
+                >
+                    <i class="fa-solid fa-box-open"></i>
+                    <span>Bags</span>
+                </router-link>
+
+                <router-link
+                    :to="{ name: 'admin.chats' }"
+                    class="nav-item"
+                    @click="closeSidebar"
+                >
+                    <i class="fa-solid fa-comments"></i>
+                    <span>Customer Chats</span>
+                </router-link>
+
+                <router-link
+                    :to="{ name: 'admin.profile' }"
                     class="nav-item"
                     @click="closeSidebar"
                 >
@@ -60,9 +75,8 @@
                     <span>Profile</span>
                 </router-link>
 
-                <!-- THEME -->
                 <router-link
-                    :to="{ name: 'user.theme' }"
+                    :to="{ name: 'admin.theme' }"
                     class="nav-item"
                     @click="closeSidebar"
                 >
@@ -70,9 +84,8 @@
                     <span>Theme</span>
                 </router-link>
 
-                <!-- PASSWORD -->
                 <router-link
-                    :to="{ name: 'user.change-password' }"
+                    :to="{ name: 'admin.change-password' }"
                     class="nav-item"
                     @click="closeSidebar"
                 >
@@ -137,7 +150,7 @@
                         <h1>{{ pageTitle }}</h1>
 
                         <p>
-                            Welcome to your account
+                            Admin Control Panel
                         </p>
                     </div>
 
@@ -159,7 +172,7 @@
                             </strong>
 
                             <small>
-                                User Account
+                                Administrator
                             </small>
 
                         </div>
@@ -170,7 +183,7 @@
 
             </header>
 
-            <!-- PAGE CONTENT -->
+            <!-- PAGE CONTENT — ZERO PADDING -->
             <main class="main-content">
                 <router-view />
             </main>
@@ -179,6 +192,7 @@
 
     </div>
 </template>
+
 
 <script setup>
 import {
@@ -204,6 +218,7 @@ const route = useRoute();
 const sidebarOpen = ref(false);
 const loggingOut = ref(false);
 
+
 /*
 |--------------------------------------------------------------------------
 | USER
@@ -215,7 +230,7 @@ const user = computed(() => {
 });
 
 const userName = computed(() => {
-    return user.value.name || 'User';
+    return user.value.name || 'Admin';
 });
 
 const userEmail = computed(() => {
@@ -223,10 +238,22 @@ const userEmail = computed(() => {
 });
 
 const userInitial = computed(() => {
-    return userName.value
-        .charAt(0)
-        .toUpperCase();
+    const name = userName.value.trim();
+
+    if (!name) return 'A';
+
+    const parts = name.split(/\s+/);
+
+    if (parts.length === 1) {
+        return parts[0].charAt(0).toUpperCase();
+    }
+
+    return (
+        parts[0].charAt(0) +
+        parts[parts.length - 1].charAt(0)
+    ).toUpperCase();
 });
+
 
 /*
 |--------------------------------------------------------------------------
@@ -235,27 +262,22 @@ const userInitial = computed(() => {
 */
 
 const pageTitle = computed(() => {
-
     const titles = {
-
-        'user.dashboard':
-            'Dashboard',
-
-        'user.marketplace':
-            'Marketplace',
-
-        'user.profile':
-            'Profile',
-
-        'user.theme':
-            'Theme',
-
-        'user.change-password':
-            'Change Password',
+        'admin.dashboard': 'Dashboard',
+        'admin.users': 'Users',
+        'admin.bags': 'Bags',
+        'admin.bags.create': 'Add Bag',
+        'admin.bags.show': 'Bag Details',
+        'admin.bags.edit': 'Edit Bag',
+        'admin.chats': 'Customer Chats',
+        'admin.profile': 'Profile',
+        'admin.theme': 'Theme',
+        'admin.change-password': 'Change Password',
     };
 
     return titles[route.name] || 'Dashboard';
 });
+
 
 /*
 |--------------------------------------------------------------------------
@@ -264,13 +286,13 @@ const pageTitle = computed(() => {
 */
 
 function toggleSidebar() {
-    sidebarOpen.value =
-        !sidebarOpen.value;
+    sidebarOpen.value = !sidebarOpen.value;
 }
 
 function closeSidebar() {
     sidebarOpen.value = false;
 }
+
 
 /*
 |--------------------------------------------------------------------------
@@ -279,35 +301,22 @@ function closeSidebar() {
 */
 
 async function handleLogout() {
-
-    if (loggingOut.value) {
-        return;
-    }
+    if (loggingOut.value) return;
 
     loggingOut.value = true;
 
     try {
-
         await logout();
-
     } catch (error) {
-
-        console.error(
-            'Logout error:',
-            error
-        );
-
+        console.error('Logout error:', error);
     } finally {
-
         loggingOut.value = false;
-
         sidebarOpen.value = false;
 
-        router.push({
-            name: 'login'
-        });
+        router.push({ name: 'login' });
     }
 }
+
 
 /*
 |--------------------------------------------------------------------------
@@ -316,32 +325,28 @@ async function handleLogout() {
 */
 
 onMounted(async () => {
-
     try {
-
         if (!authState.initialized) {
             await loadUser();
         }
-
     } catch (error) {
-
-        console.error(
-            'User layout error:',
-            error
-        );
+        console.error('Admin layout error:', error);
     }
 });
 </script>
 
+
 <style scoped>
+
 * {
     box-sizing: border-box;
 }
 
-.user-layout {
+.admin-layout {
     min-height: 100vh;
     background: #f5f7fb;
 }
+
 
 /* =========================================================
    SIDEBAR
@@ -363,18 +368,16 @@ onMounted(async () => {
     transition: transform 0.3s ease;
 }
 
-/* BRAND */
-
 .brand {
     height: 72px;
     padding: 0 22px;
+    flex-shrink: 0;
 
     display: flex;
     align-items: center;
     gap: 12px;
 
-    border-bottom:
-        1px solid rgba(255,255,255,0.08);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .brand-icon {
@@ -383,7 +386,7 @@ onMounted(async () => {
 
     border-radius: 10px;
 
-    background: #2563eb;
+    background: #1d4ed8;
 
     display: flex;
     align-items: center;
@@ -397,27 +400,29 @@ onMounted(async () => {
     font-weight: 700;
 }
 
+
 /* USER INFO */
 
 .user-info {
     padding: 22px 18px;
+    flex-shrink: 0;
 
     display: flex;
     align-items: center;
     gap: 12px;
 
-    border-bottom:
-        1px solid rgba(255,255,255,0.08);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .avatar,
 .header-avatar {
     width: 42px;
     height: 42px;
+    flex-shrink: 0;
 
     border-radius: 50%;
 
-    background: #2563eb;
+    background: #1d4ed8;
 
     display: flex;
     align-items: center;
@@ -454,29 +459,40 @@ onMounted(async () => {
     text-overflow: ellipsis;
 }
 
+
 /* =========================================================
    NAVIGATION
 ========================================================= */
 
 .sidebar-nav {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+
     padding: 18px 12px;
 
     display: flex;
     flex-direction: column;
-
     gap: 5px;
+}
 
-    overflow-y: auto;
+.sidebar-nav::-webkit-scrollbar {
+    width: 5px;
+}
+
+.sidebar-nav::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.10);
+    border-radius: 10px;
 }
 
 .nav-item {
     height: 46px;
+    flex-shrink: 0;
 
     padding: 0 15px;
 
     display: flex;
     align-items: center;
-
     gap: 13px;
 
     border-radius: 9px;
@@ -486,13 +502,14 @@ onMounted(async () => {
     text-decoration: none;
 
     font-size: 14px;
+    font-weight: 500;
 
-    transition: 0.2s;
+    transition: background 0.2s ease, color 0.2s ease;
 }
 
 .nav-item i {
     width: 20px;
-
+    flex-shrink: 0;
     text-align: center;
 }
 
@@ -502,9 +519,10 @@ onMounted(async () => {
 }
 
 .nav-item.router-link-active {
-    background: #2563eb;
+    background: #1d4ed8;
     color: white;
 }
+
 
 /* =========================================================
    SIDEBAR BOTTOM
@@ -512,11 +530,11 @@ onMounted(async () => {
 
 .sidebar-bottom {
     margin-top: auto;
+    flex-shrink: 0;
 
     padding: 15px 12px;
 
-    border-top:
-        1px solid rgba(255,255,255,0.08);
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .logout-btn {
@@ -534,17 +552,18 @@ onMounted(async () => {
 
     display: flex;
     align-items: center;
-
     justify-content: flex-start;
-
     gap: 13px;
 
     padding: 0 15px;
 
     font-size: 14px;
+    font-weight: 500;
+
+    transition: background 0.2s ease;
 }
 
-.logout-btn:hover {
+.logout-btn:hover:not(:disabled) {
     background: #374151;
 }
 
@@ -553,14 +572,19 @@ onMounted(async () => {
     cursor: not-allowed;
 }
 
+
 /* =========================================================
-   MAIN
+   MAIN WRAPPER
 ========================================================= */
 
 .main-wrapper {
     margin-left: 250px;
     min-height: 100vh;
+
+    display: flex;
+    flex-direction: column;
 }
+
 
 /* =========================================================
    HEADER
@@ -568,11 +592,11 @@ onMounted(async () => {
 
 .top-header {
     height: 72px;
+    flex-shrink: 0;
 
     background: white;
 
-    border-bottom:
-        1px solid #e5e7eb;
+    border-bottom: 1px solid #e5e7eb;
 
     display: flex;
     align-items: center;
@@ -589,7 +613,6 @@ onMounted(async () => {
 .header-left {
     display: flex;
     align-items: center;
-
     gap: 15px;
 }
 
@@ -599,7 +622,6 @@ onMounted(async () => {
     color: #111827;
 
     font-size: 20px;
-
     font-weight: 700;
 }
 
@@ -628,19 +650,15 @@ onMounted(async () => {
     font-size: 18px;
 }
 
-/* HEADER USER */
-
 .header-user {
     display: flex;
     align-items: center;
-
     gap: 10px;
 }
 
 .header-avatar {
     width: 38px;
     height: 38px;
-
     font-size: 14px;
 }
 
@@ -659,15 +677,21 @@ onMounted(async () => {
     font-size: 11px;
 }
 
+
 /* =========================================================
-   CONTENT
+   MAIN CONTENT — ZERO PADDING / ZERO GAP
 ========================================================= */
 
 .main-content {
-    padding: 30px;
+    flex: 1 1 auto;
+    min-height: 0;
 
-    min-height:
-        calc(100vh - 72px);
+    padding: 0;
+    margin: 0;
+
+    width: 100%;
+
+    background: #f5f7fb;
 }
 
 /* OVERLAY */
@@ -676,11 +700,12 @@ onMounted(async () => {
     display: none;
 }
 
+
 /* =========================================================
    DARK MODE
 ========================================================= */
 
-:global(html.dark) .user-layout {
+:global(html.dark) .admin-layout {
     background: #0b0f17 !important;
     color: #e5e7eb !important;
 }
@@ -733,8 +758,16 @@ onMounted(async () => {
     color: #ffffff !important;
 }
 
+:global(html.dark) .nav-item:hover i {
+    color: #ffffff !important;
+}
+
 :global(html.dark) .nav-item.router-link-active {
-    background: #2563eb !important;
+    background: #1d4ed8 !important;
+    color: #ffffff !important;
+}
+
+:global(html.dark) .nav-item.router-link-active i {
     color: #ffffff !important;
 }
 
@@ -745,6 +778,10 @@ onMounted(async () => {
 :global(html.dark) .logout-btn {
     background: #1f2937 !important;
     color: #fca5a5 !important;
+}
+
+:global(html.dark) .logout-btn i {
+    color: #f87171 !important;
 }
 
 :global(html.dark) .logout-btn:hover {
@@ -773,6 +810,10 @@ onMounted(async () => {
     color: #e5e7eb !important;
 }
 
+:global(html.dark) .menu-btn:hover {
+    background: #334155 !important;
+}
+
 :global(html.dark) .header-user-info strong {
     color: #f9fafb !important;
 }
@@ -790,6 +831,7 @@ onMounted(async () => {
     background: rgba(0, 0, 0, 0.7) !important;
 }
 
+
 /* =========================================================
    RESPONSIVE
 ========================================================= */
@@ -797,13 +839,11 @@ onMounted(async () => {
 @media (max-width: 768px) {
 
     .sidebar {
-        transform:
-            translateX(-100%);
+        transform: translateX(-100%);
     }
 
     .sidebar.sidebar-open {
-        transform:
-            translateX(0);
+        transform: translateX(0);
     }
 
     .main-wrapper {
@@ -812,7 +852,6 @@ onMounted(async () => {
 
     .menu-btn {
         display: flex;
-
         align-items: center;
         justify-content: center;
     }
@@ -825,20 +864,13 @@ onMounted(async () => {
         padding: 0 18px;
     }
 
-    .main-content {
-        padding: 20px;
-    }
-
     .sidebar-overlay {
         display: block;
 
         position: fixed;
-
         inset: 0;
 
-        background:
-            rgba(0,0,0,0.45);
-
+        background: rgba(0, 0, 0, 0.45);
         z-index: 999;
     }
 }

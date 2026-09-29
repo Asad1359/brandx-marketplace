@@ -2,10 +2,18 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Events\ConversationCreated;
+use App\Events\MessageDeleted;
+use App\Events\MessageRead;
+use App\Events\MessageSent;
+use App\Events\UnreadCountUpdated;
+use App\Events\UserTyping;
 use App\Http\Controllers\Controller;
 use App\Models\ChatConversation;
 use App\Models\ChatMessage;
 use App\Models\User;
+use App\Notifications\NewChatMessageForAdmin;
+use App\Notifications\NewChatMessageForUser;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -22,31 +30,25 @@ class ChatController extends Controller
         $user = Auth::user();
 
         $conversation = ChatConversation::firstOrCreate(
-            [
-                'user_id' => $user->id,
-            ],
-            [
-                'unread_admin' => 0,
-                'unread_user' => 0,
-            ]
+            ['user_id' => $user->id],
+            ['unread_admin' => 0, 'unread_user' => 0]
         );
 
         $messages = $conversation->messages()
             ->orderBy('id', 'asc')
             ->get();
 
-        // User has opened the conversation.
-        // Admin messages are now read.
-        $conversation->update([
-            'unread_user' => 0,
-        ]);
+        $conversation->update(['unread_user' => 0]);
 
         $conversation->messages()
             ->where('sender_type', 'admin')
-            ->where('is_read', false)
+            ->whereNull('read_at')
             ->update([
                 'is_read' => true,
+                'read_at' => now(),
             ]);
+
+        broadcast(new UnreadCountUpdated((int) $user->id, 0));
 
         return response()->json([
             'success' => true,
@@ -65,50 +67,70 @@ class ChatController extends Controller
     public function userSendMessage(Request $request)
     {
         $request->validate([
-            'message' => [
-                'required',
-                'string',
-                'max:5000',
-            ],
+            'message' => ['nullable', 'string', 'max:5000'],
+            'attachment' => ['nullable', 'file', 'max:20480'],
         ]);
+
+        if (!$request->filled('message') && !$request->hasFile('attachment')) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Please enter a message or attach a file.',
+            ], 422);
+        }
 
         $user = Auth::user();
 
         $conversation = ChatConversation::firstOrCreate(
-            [
-                'user_id' => $user->id,
-            ],
-            [
-                'unread_admin' => 0,
-                'unread_user' => 0,
-            ]
+            ['user_id' => $user->id],
+            ['unread_admin' => 0, 'unread_user' => 0]
         );
 
-        $messageText = trim($request->message);
+        $isNewConversation = $conversation->messages()->count() === 0;
+
+        $messageText = trim((string) $request->input('message', ''));
+
+        $attachmentData = $this->storeAttachment($request);
 
         $message = ChatMessage::create([
             'conversation_id' => $conversation->id,
             'sender_type' => 'user',
             'sender_id' => $user->id,
-            'message' => $messageText,
+            'message' => $messageText ?: null,
             'is_read' => false,
+            ...$attachmentData,
         ]);
 
         $conversation->update([
-            'last_message' => $messageText,
+            'last_message' => $messageText ?: '📎 Attachment',
             'unread_admin' => $conversation->unread_admin + 1,
         ]);
 
+        broadcast(new MessageSent($message));
+
+        if ($isNewConversation) {
+            broadcast(new ConversationCreated($conversation->fresh('user')));
+        }
+
+        $admins = User::where('role', 'admin')
+            ->where('is_active', true)
+            ->get();
+
+        foreach ($admins as $admin) {
+            $admin->notify(
+                new NewChatMessageForAdmin($conversation, $user->name)
+            );
+        }
+
         return response()->json([
             'success' => true,
-            'message' => $message,
+            'message' => $message->fresh(),
         ], 201);
     }
 
 
     /*
     |--------------------------------------------------------------------------
-    | USER: Unread Notification Count
+    | USER: Unread Count
     |--------------------------------------------------------------------------
     */
 
@@ -116,15 +138,69 @@ class ChatController extends Controller
     {
         $user = Auth::user();
 
-        $conversation = ChatConversation::where(
-            'user_id',
-            $user->id
-        )->first();
+        $conversation = ChatConversation::where('user_id', $user->id)->first();
 
         return response()->json([
             'success' => true,
             'count' => $conversation?->unread_user ?? 0,
         ]);
+    }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | USER: Mark messages as read
+    |--------------------------------------------------------------------------
+    */
+
+    public function userMarkAsRead(Request $request)
+    {
+        $user = Auth::user();
+
+        $conversation = ChatConversation::where('user_id', $user->id)->first();
+
+        if (!$conversation) {
+            return response()->json(['success' => false], 404);
+        }
+
+        $now = now();
+        $marked = 0;
+
+        $messages = $conversation->messages()
+            ->where('sender_type', 'admin')
+            ->whereNull('read_at')
+            ->get();
+
+        foreach ($messages as $message) {
+            $message->update(['read_at' => $now, 'is_read' => true]);
+            broadcast(new MessageRead($message));
+            $marked++;
+        }
+
+        return response()->json([
+            'success' => true,
+            'marked' => $marked,
+        ]);
+    }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | USER: Broadcast typing
+    |--------------------------------------------------------------------------
+    */
+
+    public function userTyping(Request $request)
+    {
+        $user = Auth::user();
+
+        broadcast(new UserTyping(
+            (int) $user->id,
+            'user',
+            $user->name
+        ))->toOthers();
+
+        return response()->json(['success' => true]);
     }
 
 
@@ -139,10 +215,9 @@ class ChatController extends Controller
         $conversations = ChatConversation::with('user')
             ->withCount([
                 'messages as unread_messages_count' => function ($query) {
-                    $query
-                        ->where('sender_type', 'user')
+                    $query->where('sender_type', 'user')
                         ->where('is_read', false);
-                }
+                },
             ])
             ->orderByDesc('updated_at')
             ->get();
@@ -171,10 +246,7 @@ class ChatController extends Controller
             ], 404);
         }
 
-        $conversation = ChatConversation::where(
-            'user_id',
-            $user->id
-        )->first();
+        $conversation = ChatConversation::where('user_id', $user->id)->first();
 
         if (!$conversation) {
             return response()->json([
@@ -189,17 +261,14 @@ class ChatController extends Controller
             ->orderBy('id', 'asc')
             ->get();
 
-        // Admin opened this conversation.
-        $conversation->update([
-            'unread_admin' => 0,
-        ]);
+        $conversation->update(['unread_admin' => 0]);
 
-        // Mark user messages as read.
         $conversation->messages()
             ->where('sender_type', 'user')
-            ->where('is_read', false)
+            ->whereNull('read_at')
             ->update([
                 'is_read' => true,
+                'read_at' => now(),
             ]);
 
         return response()->json([
@@ -217,17 +286,19 @@ class ChatController extends Controller
     |--------------------------------------------------------------------------
     */
 
-    public function adminSendMessage(
-        Request $request,
-        $userId
-    ) {
+    public function adminSendMessage(Request $request, $userId)
+    {
         $request->validate([
-            'message' => [
-                'required',
-                'string',
-                'max:5000',
-            ],
+            'message' => ['nullable', 'string', 'max:5000'],
+            'attachment' => ['nullable', 'file', 'max:20480'],
         ]);
+
+        if (!$request->filled('message') && !$request->hasFile('attachment')) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Please enter a message or attach a file.',
+            ], 422);
+        }
 
         $user = User::find($userId);
 
@@ -239,33 +310,40 @@ class ChatController extends Controller
         }
 
         $conversation = ChatConversation::firstOrCreate(
-            [
-                'user_id' => $user->id,
-            ],
-            [
-                'unread_admin' => 0,
-                'unread_user' => 0,
-            ]
+            ['user_id' => $user->id],
+            ['unread_admin' => 0, 'unread_user' => 0]
         );
 
-        $messageText = trim($request->message);
+        $messageText = trim((string) $request->input('message', ''));
+
+        $attachmentData = $this->storeAttachment($request);
 
         $message = ChatMessage::create([
             'conversation_id' => $conversation->id,
             'sender_type' => 'admin',
             'sender_id' => Auth::id(),
-            'message' => $messageText,
+            'message' => $messageText ?: null,
             'is_read' => false,
+            ...$attachmentData,
         ]);
 
         $conversation->update([
-            'last_message' => $messageText,
+            'last_message' => $messageText ?: '📎 Attachment',
             'unread_user' => $conversation->unread_user + 1,
         ]);
 
+        broadcast(new MessageSent($message));
+
+        broadcast(new UnreadCountUpdated(
+            (int) $user->id,
+            (int) $conversation->fresh()->unread_user
+        ));
+
+        $user->notify(new NewChatMessageForUser($conversation));
+
         return response()->json([
             'success' => true,
-            'message' => $message,
+            'message' => $message->fresh(),
         ], 201);
     }
 
@@ -278,15 +356,139 @@ class ChatController extends Controller
 
     public function adminUnreadCount()
     {
-        $count = ChatConversation::where(
-            'unread_admin',
-            '>',
-            0
-        )->sum('unread_admin');
+        $count = ChatConversation::where('unread_admin', '>', 0)
+            ->sum('unread_admin');
 
         return response()->json([
             'success' => true,
             'count' => $count,
         ]);
+    }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | ADMIN: Mark messages as read
+    |--------------------------------------------------------------------------
+    */
+
+    public function adminMarkAsRead($userId)
+    {
+        $conversation = ChatConversation::where('user_id', $userId)->first();
+
+        if (!$conversation) {
+            return response()->json(['success' => false], 404);
+        }
+
+        $now = now();
+        $marked = 0;
+
+        $messages = $conversation->messages()
+            ->where('sender_type', 'user')
+            ->whereNull('read_at')
+            ->get();
+
+        foreach ($messages as $message) {
+            $message->update(['read_at' => $now, 'is_read' => true]);
+            broadcast(new MessageRead($message));
+            $marked++;
+        }
+
+        return response()->json([
+            'success' => true,
+            'marked' => $marked,
+        ]);
+    }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | ADMIN: Broadcast typing
+    |--------------------------------------------------------------------------
+    */
+
+    public function adminTyping(Request $request, $userId)
+    {
+        $admin = Auth::user();
+
+        broadcast(new UserTyping(
+            (int) $userId,
+            'admin',
+            $admin->name
+        ))->toOthers();
+
+        return response()->json(['success' => true]);
+    }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | DELETE MESSAGE
+    |--------------------------------------------------------------------------
+    */
+
+    public function deleteMessage($messageId)
+    {
+        $user = Auth::user();
+
+        $message = ChatMessage::find($messageId);
+
+        if (!$message) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Message not found.',
+            ], 404);
+        }
+
+        if ($user->role !== 'admin') {
+            if (
+                $message->sender_type !== 'user' ||
+                (int) $message->sender_id !== (int) $user->id
+            ) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Unauthorized.',
+                ], 403);
+            }
+        }
+
+        $message->delete();
+
+        broadcast(new MessageDeleted($message));
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Message deleted.',
+        ]);
+    }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | HELPER: Store Attachment
+    |--------------------------------------------------------------------------
+    */
+
+    private function storeAttachment(Request $request): array
+    {
+        if (!$request->hasFile('attachment')) {
+            return [
+                'attachment_path' => null,
+                'attachment_name' => null,
+                'attachment_type' => null,
+                'attachment_size' => null,
+            ];
+        }
+
+        $file = $request->file('attachment');
+
+        $path = $file->store('chat-attachments', 'public');
+
+        return [
+            'attachment_path' => $path,
+            'attachment_name' => $file->getClientOriginalName(),
+            'attachment_type' => $file->getClientMimeType(),
+            'attachment_size' => $file->getSize(),
+        ];
     }
 }
