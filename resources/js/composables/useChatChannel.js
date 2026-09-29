@@ -2,67 +2,86 @@ import { ref, onMounted, onUnmounted } from 'vue';
 
 /*
 |--------------------------------------------------------------------------
+| WAIT FOR ECHO
+|--------------------------------------------------------------------------
+| Returns a promise that resolves once window.Echo is ready.
+*/
+function waitForEcho(timeout = 5000) {
+    return new Promise((resolve, reject) => {
+        if (window.Echo) return resolve(window.Echo);
+
+        const start = Date.now();
+        const timer = setInterval(() => {
+            if (window.Echo) {
+                clearInterval(timer);
+                resolve(window.Echo);
+            } else if (Date.now() - start > timeout) {
+                clearInterval(timer);
+                reject(new Error('Laravel Echo is not initialized.'));
+            }
+        }, 50);
+    });
+}
+
+/*
+|--------------------------------------------------------------------------
+| GET AUTH USER
+|--------------------------------------------------------------------------
+*/
+function getAuthUser() {
+    try {
+        return JSON.parse(localStorage.getItem('auth_user') || '{}');
+    } catch {
+        return {};
+    }
+}
+
+/*
+|--------------------------------------------------------------------------
 | USER CHAT CHANNEL
 |--------------------------------------------------------------------------
 */
-
 export function useUserChatChannel({ onMessage, onUnread } = {}) {
     const connected = ref(false);
-
     let channel = null;
+    let userId = null;
 
-    onMounted(() => {
-        if (!window.Echo) {
-            console.warn('Laravel Echo is not initialized.');
-            return;
-        }
-
-        let user = {};
-
-        try {
-            user = JSON.parse(
-                localStorage.getItem('auth_user') || '{}'
-            );
-        } catch {
-            user = {};
-        }
+    onMounted(async () => {
+        const user = getAuthUser();
 
         if (!user?.id) {
+            console.warn('useUserChatChannel: no auth_user in localStorage.');
             return;
         }
 
-        channel = window.Echo
-            .private(`chat.user.${user.id}`)
-            .listen('.message.sent', (payload) => {
-                onMessage?.(payload);
-            })
-            .listen('.unread.count', (payload) => {
-                onUnread?.(payload.count);
-            });
+        userId = user.id;
 
-        channel.subscribed(() => {
-            connected.value = true;
-        });
+        try {
+            const echo = await waitForEcho();
+
+            channel = echo
+                .private(`chat.user.${userId}`)
+                .listen('.message.sent', (payload) => {
+                    onMessage?.(payload);
+                })
+                .listen('.unread.count', (payload) => {
+                    onUnread?.(payload.count);
+                });
+
+            channel.subscribed(() => {
+                connected.value = true;
+            });
+        } catch (e) {
+            console.error('useUserChatChannel:', e.message);
+        }
     });
 
     onUnmounted(() => {
-        if (!window.Echo || !channel) {
-            return;
+        if (window.Echo && userId) {
+            window.Echo.leave(`chat.user.${userId}`);
         }
-
-        let user = {};
-
-        try {
-            user = JSON.parse(
-                localStorage.getItem('auth_user') || '{}'
-            );
-        } catch {
-            user = {};
-        }
-
-        if (user?.id) {
-            window.Echo.leave(`chat.user.${user.id}`);
-        }
+        channel = null;
+        connected.value = false;
     });
 
     return { connected };
@@ -73,36 +92,37 @@ export function useUserChatChannel({ onMessage, onUnread } = {}) {
 | ADMIN CHAT CHANNEL
 |--------------------------------------------------------------------------
 */
-
 export function useAdminChatChannel({ onMessage, onNewConversation } = {}) {
     const connected = ref(false);
-
     let channel = null;
 
-    onMounted(() => {
-        if (!window.Echo) {
-            console.warn('Laravel Echo is not initialized.');
-            return;
-        }
+    onMounted(async () => {
+        try {
+            const echo = await waitForEcho();
 
-        channel = window.Echo
-            .private('chat.admin')
-            .listen('.message.sent', (payload) => {
-                onMessage?.(payload);
-            })
-            .listen('.conversation.created', (payload) => {
-                onNewConversation?.(payload);
+            channel = echo
+                .private('chat.admin')
+                .listen('.message.sent', (payload) => {
+                    onMessage?.(payload);
+                })
+                .listen('.conversation.created', (payload) => {
+                    onNewConversation?.(payload);
+                });
+
+            channel.subscribed(() => {
+                connected.value = true;
             });
-
-        channel.subscribed(() => {
-            connected.value = true;
-        });
+        } catch (e) {
+            console.error('useAdminChatChannel:', e.message);
+        }
     });
 
     onUnmounted(() => {
         if (window.Echo) {
             window.Echo.leave('chat.admin');
         }
+        channel = null;
+        connected.value = false;
     });
 
     return { connected };

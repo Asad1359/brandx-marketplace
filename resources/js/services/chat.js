@@ -7,11 +7,11 @@ import api from './api';
 */
 
 export const getChat = () => {
-    return api.get('/chat');
+    return api.get('/chat/messages');
 };
 
 export const sendChatMessage = (message) => {
-    return api.post('/chat/message', { message });
+    return api.post('/chat/messages', { message });
 };
 
 export const getChatUnreadCount = () => {
@@ -33,17 +33,8 @@ export const getAdminConversation = (userId) => {
 };
 
 export const sendAdminChatMessage = (userId, message) => {
-    return api.post('/admin/chats/message', {
-        user_id: userId,
-        message,
-    });
+    return api.post(`/admin/chats/${userId}`, { message });
 };
-
-/*
-|--------------------------------------------------------------------------
-| DEFAULT EXPORT
-|--------------------------------------------------------------------------
-*/
 
 export default {
     getChat,

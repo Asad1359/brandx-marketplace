@@ -1,7 +1,5 @@
 <?php
 
-use Illuminate\Support\Facades\Route;
-
 use App\Http\Controllers\Api\AdminChatController;
 use App\Http\Controllers\Api\AdminController;
 use App\Http\Controllers\Api\AdminUserController;
@@ -11,43 +9,32 @@ use App\Http\Controllers\Api\ChatController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\MarketplaceController;
 use App\Http\Controllers\Api\ProfileController;
-
+use App\Http\Controllers\Api\WikipediaController;
+use Illuminate\Support\Facades\Broadcast;
+use Illuminate\Support\Facades\Route;
 
 /*
 |--------------------------------------------------------------------------
-| PUBLIC AUTH ROUTES
+| PUBLIC ROUTES
 |--------------------------------------------------------------------------
 */
 
 Route::post('/register', [AuthController::class, 'register']);
-
 Route::post('/register/verify-otp', [AuthController::class, 'verifyRegistrationOtp']);
-
 Route::post('/register/resend-otp', [AuthController::class, 'resendRegistrationOtp']);
 
 Route::post('/login', [AuthController::class, 'login']);
 
 Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
-
 Route::post('/forgot-password/verify-otp', [AuthController::class, 'verifyPasswordResetOtp']);
-
 Route::post('/forgot-password/resend-otp', [AuthController::class, 'resendPasswordResetOtp']);
-
 Route::post('/reset-password', [AuthController::class, 'resetPassword']);
 
-
-/*
-|--------------------------------------------------------------------------
-| MARKETPLACE CALLBACK (called by Project 2)
-|--------------------------------------------------------------------------
-|
-| Yeh route public hai kyunke Project 2 yahan callback bhejta hai.
-| Agar chahein to isay signature / token se protect kar sakte hain.
-|
-*/
-
+Route::get('/marketplace', [MarketplaceController::class, 'index']);
+Route::get('/marketplace/products', [MarketplaceController::class, 'products']);
+Route::post('/marketplace/search', [MarketplaceController::class, 'search']);
+Route::get('/marketplace/status/{id}', [MarketplaceController::class, 'status']);
 Route::post('/marketplace/callback', [MarketplaceController::class, 'marketplaceCallback']);
-
 
 /*
 |--------------------------------------------------------------------------
@@ -59,14 +46,20 @@ Route::middleware('auth:sanctum')->group(function () {
 
     /*
     |--------------------------------------------------------------------------
+    | BROADCASTING AUTH
+    |--------------------------------------------------------------------------
+    */
+
+    Broadcast::routes(['middleware' => ['auth:sanctum']]);
+
+    /*
+    |--------------------------------------------------------------------------
     | AUTH
     |--------------------------------------------------------------------------
     */
 
     Route::get('/user', [AuthController::class, 'user']);
-
     Route::post('/logout', [AuthController::class, 'logout']);
-
 
     /*
     |--------------------------------------------------------------------------
@@ -75,67 +68,37 @@ Route::middleware('auth:sanctum')->group(function () {
     */
 
     Route::get('/profile', [ProfileController::class, 'index']);
-
     Route::put('/profile', [ProfileController::class, 'update']);
-
-    Route::post('/profile/password', [ProfileController::class, 'updatePassword']);
-
-    Route::put('/profile/theme', [ProfileController::class, 'updateTheme']);
-
     Route::post('/profile/image', [ProfileController::class, 'updateImage']);
-
+    Route::post('/profile/password', [ProfileController::class, 'updatePassword']);
+    Route::put('/profile/theme', [ProfileController::class, 'updateTheme']);
 
     /*
     |--------------------------------------------------------------------------
-    | USER DASHBOARD
+    | DASHBOARD
     |--------------------------------------------------------------------------
     */
 
     Route::get('/dashboard', [DashboardController::class, 'user']);
 
-
     /*
     |--------------------------------------------------------------------------
-    | BAGS (user side)
+    | BAGS
     |--------------------------------------------------------------------------
     */
 
     Route::get('/bags', [BagController::class, 'index']);
-
     Route::get('/bags/{id}', [BagController::class, 'show']);
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | MARKETPLACE (user side)
-    |--------------------------------------------------------------------------
-    */
-
-    Route::get('/marketplace', [MarketplaceController::class, 'index']);
-
-    Route::get('/marketplace/products', [MarketplaceController::class, 'products']);
-
-    Route::post('/marketplace/search', [MarketplaceController::class, 'search']);
-
-    Route::get('/marketplace/status/{id}', [MarketplaceController::class, 'status']);
-
 
     /*
     |--------------------------------------------------------------------------
     | USER CHAT
     |--------------------------------------------------------------------------
-    |
-    | ⚠️ Yeh methods ChatController mein exactly inhi names se hain:
-    |    userMessages, userSendMessage, userUnreadCount
-    |
     */
 
-    Route::get('/chat', [ChatController::class, 'userMessages']);
-
-    Route::post('/chat/message', [ChatController::class, 'userSendMessage']);
-
+    Route::get('/chat/messages', [ChatController::class, 'userMessages']);
+    Route::post('/chat/messages', [ChatController::class, 'userSendMessage']);
     Route::get('/chat/unread', [ChatController::class, 'userUnreadCount']);
-
 
     /*
     |--------------------------------------------------------------------------
@@ -143,88 +106,54 @@ Route::middleware('auth:sanctum')->group(function () {
     |--------------------------------------------------------------------------
     */
 
-    Route::middleware('admin')->prefix('admin')->group(function () {
+    Route::middleware('admin')->group(function () {
 
         /*
-        |------------------------------------------------------------------
+        |----------------------------------------------------------------------
         | DASHBOARD
-        |------------------------------------------------------------------
+        |----------------------------------------------------------------------
         */
 
-        Route::get('/dashboard', [AdminController::class, 'dashboard']);
-
+        Route::get('/admin/dashboard', [DashboardController::class, 'admin']);
+        Route::get('/admin/profile', [ProfileController::class, 'adminProfile']);
+        Route::put('/admin/profile/password', [ProfileController::class, 'updateAdminPassword']);
+        Route::put('/admin/profile/theme', [ProfileController::class, 'updateAdminTheme']);
 
         /*
-        |------------------------------------------------------------------
-        | ADMIN PROFILE
-        |------------------------------------------------------------------
+        |----------------------------------------------------------------------
+        | USERS
+        |----------------------------------------------------------------------
         */
 
-        Route::get('/profile', [ProfileController::class, 'adminProfile']);
-
-        Route::put('/profile', [ProfileController::class, 'update']);
-
-        Route::put('/profile/password', [ProfileController::class, 'updateAdminPassword']);
-
-        Route::put('/profile/theme', [ProfileController::class, 'updateAdminTheme']);
-
+        Route::get('/admin/users', [AdminUserController::class, 'index']);
+        Route::post('/admin/users', [AdminUserController::class, 'store']);
+        Route::get('/admin/users/{id}', [AdminUserController::class, 'show']);
+        Route::put('/admin/users/{id}', [AdminUserController::class, 'update']);
+        Route::delete('/admin/users/{id}', [AdminUserController::class, 'destroy']);
+        Route::patch('/admin/users/{id}/status', [AdminUserController::class, 'toggleStatus']);
+        Route::patch('/admin/users/{id}/deactivate', [AdminUserController::class, 'deactivate']);
+        Route::patch('/admin/users/{id}/activate', [AdminUserController::class, 'activate']);
+        Route::post('/admin/users/{id}/change-password', [AdminUserController::class, 'changePassword']);
 
         /*
-        |------------------------------------------------------------------
-        | ADMIN USERS
-        |------------------------------------------------------------------
+        |----------------------------------------------------------------------
+        | BAGS
+        |----------------------------------------------------------------------
         */
 
-        Route::get('/users', [AdminUserController::class, 'index']);
-
-        Route::post('/users', [AdminUserController::class, 'store']);
-
-        Route::get('/users/{id}', [AdminUserController::class, 'show']);
-
-        Route::put('/users/{id}', [AdminUserController::class, 'update']);
-
-        Route::delete('/users/{id}', [AdminUserController::class, 'destroy']);
-
-        Route::patch('/users/{id}/status', [AdminUserController::class, 'toggleStatus']);
-
-        Route::patch('/users/{id}/activate', [AdminUserController::class, 'activate']);
-
-        Route::patch('/users/{id}/deactivate', [AdminUserController::class, 'deactivate']);
-
-        Route::post('/users/{id}/change-password', [AdminUserController::class, 'changePassword']);
-
+        Route::post('/admin/bags', [BagController::class, 'store']);
+        Route::put('/admin/bags/{id}', [BagController::class, 'update']);
+        Route::delete('/admin/bags/{id}', [BagController::class, 'destroy']);
 
         /*
-        |------------------------------------------------------------------
-        | ADMIN BAGS
-        |------------------------------------------------------------------
-        */
-
-        Route::get('/bags', [BagController::class, 'index']);
-
-        Route::post('/bags', [BagController::class, 'store']);
-
-        Route::get('/bags/{id}', [BagController::class, 'show']);
-
-        Route::put('/bags/{id}', [BagController::class, 'update']);
-
-        Route::delete('/bags/{id}', [BagController::class, 'destroy']);
-
-
-        /*
-        |------------------------------------------------------------------
+        |----------------------------------------------------------------------
         | ADMIN CHAT
-        |------------------------------------------------------------------
-        |
-        | ⚠️ Yeh methods AdminChatController mein exactly inhi names se hain:
-        |    getAllChats, getConversation, sendMessage
-        |
+        |----------------------------------------------------------------------
         */
 
-        Route::get('/chats', [AdminChatController::class, 'getAllChats']);
-
-        Route::get('/chats/{userId}', [AdminChatController::class, 'getConversation']);
-
-        Route::post('/chats/message', [AdminChatController::class, 'sendMessage']);
+        Route::get('/admin/chats', [ChatController::class, 'adminConversations']);
+        Route::get('/admin/chats/unread', [ChatController::class, 'adminUnreadCount']);
+        Route::get('/admin/chats/{userId}', [ChatController::class, 'adminMessages']);
+        Route::post('/admin/chats/{userId}', [ChatController::class, 'adminSendMessage']);
     });
 });

@@ -5,6 +5,7 @@ import {
     logout as logoutApi
 } from '../services/auth';
 
+import { saveUser } from '../services/api';
 
 /*
 |--------------------------------------------------------------------------
@@ -26,13 +27,6 @@ export const authState = reactive({
 */
 
 export async function loadUser() {
-
-    /*
-    |--------------------------------------------------------------------------
-    | Already loading
-    |--------------------------------------------------------------------------
-    */
-
     if (authState.loading) {
         return authState.user;
     }
@@ -40,95 +34,42 @@ export async function loadUser() {
     authState.loading = true;
 
     try {
-
         const response = await getUser();
 
-        console.log(
-            'Current user response:',
-            response.data
-        );
-
-
-        /*
-        |--------------------------------------------------------------------------
-        | Laravel Response
-        |--------------------------------------------------------------------------
-        |
-        | Expected:
-        |
-        | {
-        |     success: true,
-        |     user: {...}
-        | }
-        |
-        */
+        console.log('Current user response:', response.data);
 
         if (
             response.data &&
             response.data.success === false
         ) {
-
             authState.user = null;
-
             return null;
         }
 
+        authState.user = response.data?.user ?? null;
 
-        /*
-        |--------------------------------------------------------------------------
-        | Set Current User
-        |--------------------------------------------------------------------------
-        */
-
-        authState.user =
-            response.data?.user ??
-            null;
-
+        if (authState.user) {
+            saveUser(authState.user);
+        }
 
         return authState.user;
 
     } catch (error) {
-
-        /*
-        |--------------------------------------------------------------------------
-        | 401 = Not Authenticated
-        |--------------------------------------------------------------------------
-        */
-
         if (error.response?.status === 401) {
-
-            console.warn(
-                'User is not authenticated.'
-            );
-
+            console.warn('User is not authenticated.');
         } else {
-
             console.error(
                 'Load user error:',
-                error.response?.data ||
-                error.message
+                error.response?.data || error.message
             );
         }
-
-
-        /*
-        |--------------------------------------------------------------------------
-        | Do NOT call logout API here
-        |--------------------------------------------------------------------------
-        |
-        | A failed /api/user request should not
-        | itself trigger logout.
-        |
-        */
 
         authState.user = null;
 
         return null;
 
     } finally {
-
         authState.loading = false;
-
         authState.initialized = true;
     }
 }
@@ -136,21 +77,17 @@ export async function loadUser() {
 
 /*
 |--------------------------------------------------------------------------
-| LOGIN STATE
-|--------------------------------------------------------------------------
-|
-| Login API ke baad user ko directly state mein set
-| karne ke liye.
-|
-| Is function mein setUser naam ka koi function nahi hai.
+| SET USER
 |--------------------------------------------------------------------------
 */
 
 export function setAuthUser(user) {
-
     authState.user = user ?? null;
-
     authState.initialized = true;
+
+    if (user) {
+        saveUser(user);
+    }
 }
 
 
@@ -161,83 +98,44 @@ export function setAuthUser(user) {
 */
 
 export async function logout() {
-
     try {
-
         await logoutApi();
-
     } catch (error) {
-
         console.error(
             'Logout error:',
-            error.response?.data ||
-            error.message
+            error.response?.data || error.message
         );
-
     } finally {
-
-        /*
-        |--------------------------------------------------------------------------
-        | Clear frontend auth state
-        |--------------------------------------------------------------------------
-        */
-
         authState.user = null;
-
         authState.initialized = true;
-
         authState.loading = false;
+
+        localStorage.removeItem('auth_user');
     }
 }
 
 
 /*
 |--------------------------------------------------------------------------
-| CHECK LOGIN
+| HELPERS
 |--------------------------------------------------------------------------
 */
 
 export function isLoggedIn() {
-
     return !!authState.user;
 }
 
-
-/*
-|--------------------------------------------------------------------------
-| CHECK ADMIN
-|--------------------------------------------------------------------------
-*/
-
 export function isAdmin() {
-
     return authState.user?.role === 'admin';
 }
 
-
-/*
-|--------------------------------------------------------------------------
-| GET AUTH USER
-|--------------------------------------------------------------------------
-*/
-
 export function getAuthUser() {
-
     return authState.user;
 }
 
-
-/*
-|--------------------------------------------------------------------------
-| CLEAR AUTH STATE
-|--------------------------------------------------------------------------
-*/
-
 export function clearAuthState() {
-
     authState.user = null;
-
     authState.initialized = true;
-
     authState.loading = false;
+    localStorage.removeItem('auth_user');
 }
