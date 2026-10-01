@@ -1,11 +1,5 @@
 import { ref, onMounted, onUnmounted } from 'vue';
 
-/*
-|--------------------------------------------------------------------------
-| WAIT FOR ECHO
-|--------------------------------------------------------------------------
-*/
-
 function waitForEcho(timeout = 5000) {
     return new Promise((resolve, reject) => {
         if (window.Echo) return resolve(window.Echo);
@@ -23,13 +17,6 @@ function waitForEcho(timeout = 5000) {
     });
 }
 
-
-/*
-|--------------------------------------------------------------------------
-| AUTH USER
-|--------------------------------------------------------------------------
-*/
-
 function getAuthUser() {
     try {
         return JSON.parse(localStorage.getItem('auth_user') || '{}');
@@ -37,7 +24,6 @@ function getAuthUser() {
         return {};
     }
 }
-
 
 /*
 |--------------------------------------------------------------------------
@@ -50,6 +36,9 @@ export function useUserChatChannel({
     onUnread,
     onRead,
     onDeleted,
+    onDeletedForMe,
+    onStarred,
+    onBlocked,
     onTyping,
 } = {}) {
     const connected = ref(false);
@@ -71,18 +60,13 @@ export function useUserChatChannel({
 
             channel = echo
                 .private(`chat.user.${userId}`)
-                .listen('.message.sent', (payload) => {
-                    onMessage?.(payload);
-                })
-                .listen('.unread.count', (payload) => {
-                    onUnread?.(payload.count);
-                })
-                .listen('.message.read', (payload) => {
-                    onRead?.(payload);
-                })
-                .listen('.message.deleted', (payload) => {
-                    onDeleted?.(payload);
-                })
+                .listen('.message.sent', (payload) => onMessage?.(payload))
+                .listen('.unread.count', (payload) => onUnread?.(payload.count))
+                .listen('.message.read', (payload) => onRead?.(payload))
+                .listen('.message.deleted', (payload) => onDeleted?.(payload))
+                .listen('.message.deletedForMe', (payload) => onDeletedForMe?.(payload))
+                .listen('.message.starred', (payload) => onStarred?.(payload))
+                .listen('.conversation.blocked', (payload) => onBlocked?.(payload))
                 .listen('.user.typing', (payload) => {
                     if (payload.sender_type !== 'user') {
                         onTyping?.(payload);
@@ -108,7 +92,6 @@ export function useUserChatChannel({
     return { connected };
 }
 
-
 /*
 |--------------------------------------------------------------------------
 | ADMIN CHAT CHANNEL
@@ -120,6 +103,9 @@ export function useAdminChatChannel({
     onNewConversation,
     onRead,
     onDeleted,
+    onDeletedForMe,
+    onStarred,
+    onBlocked,
     onTyping,
 } = {}) {
     const connected = ref(false);
@@ -131,18 +117,13 @@ export function useAdminChatChannel({
 
             channel = echo
                 .private('chat.admin')
-                .listen('.message.sent', (payload) => {
-                    onMessage?.(payload);
-                })
-                .listen('.conversation.created', (payload) => {
-                    onNewConversation?.(payload);
-                })
-                .listen('.message.read', (payload) => {
-                    onRead?.(payload);
-                })
-                .listen('.message.deleted', (payload) => {
-                    onDeleted?.(payload);
-                })
+                .listen('.message.sent', (payload) => onMessage?.(payload))
+                .listen('.conversation.created', (payload) => onNewConversation?.(payload))
+                .listen('.message.read', (payload) => onRead?.(payload))
+                .listen('.message.deleted', (payload) => onDeleted?.(payload))
+                .listen('.message.deletedForMe', (payload) => onDeletedForMe?.(payload))
+                .listen('.message.starred', (payload) => onStarred?.(payload))
+                .listen('.conversation.blocked', (payload) => onBlocked?.(payload))
                 .listen('.user.typing', (payload) => {
                     if (payload.sender_type !== 'admin') {
                         onTyping?.(payload);

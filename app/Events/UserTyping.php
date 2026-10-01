@@ -4,39 +4,49 @@ namespace App\Events;
 
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Broadcasting\PrivateChannel;
-use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
+use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 
-class UserTyping implements ShouldBroadcastNow
+class UserTyping implements ShouldBroadcast
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
-    public function __construct(
-        public int $userId,
-        public string $senderType,
-        public string $userName,
-    ) {}
+    public $conversationId;
+    public $userId;
+    public $userName;
+    public $recipientId;
 
-    public function broadcastOn(): array
-    {
-        return [
-            new PrivateChannel('chat.user.' . $this->userId),
-            new PrivateChannel('chat.admin'),
-        ];
+    public function __construct(
+        int $conversationId,
+        int $userId,
+        string $userName,
+        int $recipientId
+    ) {
+        $this->conversationId = $conversationId;
+        $this->userId = $userId;
+        $this->userName = $userName;
+        $this->recipientId = $recipientId;
     }
 
-    public function broadcastAs(): string
+    public function broadcastOn()
+    {
+        return new PrivateChannel(
+            'chat.user.' . $this->recipientId
+        );
+    }
+
+    public function broadcastAs()
     {
         return 'user.typing';
     }
 
-    public function broadcastWith(): array
+    public function broadcastWith()
     {
         return [
-            'user_id' => $this->userId,
-            'sender_type' => $this->senderType,
-            'user_name' => $this->userName,
+            'conversation_id' => $this->conversationId,
+            'user_id'         => $this->userId,
+            'user_name'       => $this->userName,
         ];
     }
 }

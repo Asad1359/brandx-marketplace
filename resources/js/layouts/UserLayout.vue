@@ -57,6 +57,8 @@
                     <span>Profile</span>
                 </router-link>
 
+                
+
                 <router-link
                     :to="{ name: 'user.theme' }"
                     class="nav-item"

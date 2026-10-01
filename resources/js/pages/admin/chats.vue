@@ -10,9 +10,13 @@ import AdminChat from '../../components/AdminChat.vue';
 
 <style scoped>
 .admin-chats-page {
-    width: 100%;
-    padding: 0;
-    margin: 0;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+    padding: 12px;
     box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
 }
 </style>

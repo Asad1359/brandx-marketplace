@@ -190,7 +190,11 @@ onMounted(() => {
 
 <style scoped>
 .bags-page {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
     padding: 24px;
+    box-sizing: border-box;
 }
 
 .page-header {

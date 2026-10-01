@@ -23,6 +23,7 @@
             <!-- Chat Window -->
             <div v-if="isOpen" class="chat-window">
 
+                <!-- Header -->
                 <div class="chat-header">
                     <div>
                         <h3>Support Chat</h3>
@@ -31,33 +32,54 @@
                         </span>
                     </div>
 
-                    <button
-                        class="header-close"
-                        @click="closeChat"
-                        type="button"
-                        aria-label="Close"
-                    >
-                        ×
-                    </button>
+                    <div class="header-actions">
+                        <button
+                            class="header-icon-btn"
+                            @click="showSearch = !showSearch"
+                            title="Search"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="11" cy="11" r="8"/>
+                                <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                            </svg>
+                        </button>
+
+                        <button class="header-icon-btn" @click="openRating" title="Rate">⭐</button>
+
+                        <button
+                            class="header-close"
+                            @click="closeChat"
+                            type="button"
+                            aria-label="Close"
+                        >×</button>
+                    </div>
                 </div>
 
 
+                <!-- Search -->
+                <div v-if="showSearch" class="search-bar">
+                    <input
+                        v-model="searchQuery"
+                        type="text"
+                        placeholder="Search messages..."
+                        @input="debouncedSearch"
+                    />
+                    <button v-if="searchQuery" type="button" @click="clearSearch">×</button>
+                </div>
+
+
+                <!-- Messages -->
                 <div
                     ref="messagesContainer"
                     class="messages-container"
                     @click="closeMessageMenu"
                 >
-                    <div v-if="loading" class="loading-message">
-                        Loading chat...
-                    </div>
+                    <div v-if="loading" class="loading-message">Loading chat...</div>
 
-                    <div
-                        v-else-if="messages.length === 0"
-                        class="empty-message"
-                    >
+                    <div v-else-if="messages.length === 0" class="empty-message">
                         <div class="empty-icon">💬</div>
-                        <p>No messages yet.</p>
-                        <span>Send a message to contact admin.</span>
+                        <p>{{ searchQuery ? 'No matches.' : 'No messages yet.' }}</p>
+                        <span v-if="!searchQuery">Send a message to contact admin.</span>
                     </div>
 
                     <template v-else>
@@ -83,17 +105,7 @@
                                     }"
                                 >
                                     <div v-if="message.deleted_at" class="deleted-message">
-                                        <svg
-                                            xmlns="http://www.w3.org/2000/svg"
-                                            width="14"
-                                            height="14"
-                                            viewBox="0 0 24 24"
-                                            fill="none"
-                                            stroke="currentColor"
-                                            stroke-width="2"
-                                            stroke-linecap="round"
-                                            stroke-linejoin="round"
-                                        >
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                             <circle cx="12" cy="12" r="10"/>
                                             <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>
                                         </svg>
@@ -101,16 +113,22 @@
                                     </div>
 
                                     <template v-else>
-                                        <div
-                                            v-if="message.attachment_url"
-                                            class="message-attachment"
-                                        >
+                                        <div v-if="message.parent" class="message-reply-quote">
+                                            <span class="quote-sender">
+                                                {{ message.parent.sender_type === 'user' ? 'You' : 'Admin' }}
+                                            </span>
+                                            <span class="quote-text">
+                                                {{ message.parent.message || message.parent.attachment_name || 'Attachment' }}
+                                            </span>
+                                        </div>
+
+                                        <div v-if="message.attachment_url" class="message-attachment">
                                             <img
                                                 v-if="message.is_image"
                                                 :src="message.attachment_url"
                                                 :alt="message.attachment_name"
                                                 class="attachment-image"
-                                                @click="openAttachment(message.attachment_url)"
+                                                @click="openLightbox(message.attachment_url)"
                                             />
 
                                             <video
@@ -134,119 +152,74 @@
                                                 class="attachment-file"
                                             >
                                                 <span class="file-icon">📎</span>
-                                                <span class="file-name">
-                                                    {{ message.attachment_name }}
-                                                </span>
-                                                <span class="file-size">
-                                                    {{ formatSize(message.attachment_size) }}
-                                                </span>
+                                                <span class="file-name">{{ message.attachment_name }}</span>
+                                                <span class="file-size">{{ formatSize(message.attachment_size) }}</span>
                                             </a>
                                         </div>
 
-                                        <div
-                                            v-if="message.message"
-                                            class="message-text"
-                                        >
+                                        <div v-if="message.message" class="message-text">
                                             {{ message.message }}
                                         </div>
                                     </template>
 
                                     <div class="message-meta">
-                                        <span class="message-time">
-                                            {{ formatTime(message.created_at) }}
-                                        </span>
-
+                                        <span v-if="message.is_starred" class="star-indicator" title="Starred">★</span>
+                                        <span class="message-time">{{ formatTime(message.created_at) }}</span>
                                         <span
                                             v-if="message.sender_type === 'user' && !message.deleted_at"
                                             class="read-tick"
                                             :class="{ read: !!message.read_at }"
                                         >
-                                            <svg
-                                                v-if="message.read_at"
-                                                xmlns="http://www.w3.org/2000/svg"
-                                                width="14"
-                                                height="14"
-                                                viewBox="0 0 24 24"
-                                                fill="none"
-                                                stroke="currentColor"
-                                                stroke-width="2.5"
-                                                stroke-linecap="round"
-                                                stroke-linejoin="round"
-                                            >
+                                            <svg v-if="message.read_at" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                                                 <polyline points="1 12 5 16 11 10"/>
                                                 <polyline points="9 12 13 16 22 6"/>
                                             </svg>
-
-                                            <svg
-                                                v-else
-                                                xmlns="http://www.w3.org/2000/svg"
-                                                width="14"
-                                                height="14"
-                                                viewBox="0 0 24 24"
-                                                fill="none"
-                                                stroke="currentColor"
-                                                stroke-width="2.5"
-                                                stroke-linecap="round"
-                                                stroke-linejoin="round"
-                                            >
+                                            <svg v-else xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                                                 <polyline points="20 6 9 17 4 12"/>
                                             </svg>
                                         </span>
                                     </div>
                                 </div>
-
-                                <div
-                                    v-if="activeMenu === message.id && !message.deleted_at && message.sender_type === 'user'"
-                                    class="message-menu"
-                                    @click.stop
-                                >
-                                    <button type="button" @click="deleteMessage(message)">
-                                        <svg
-                                            xmlns="http://www.w3.org/2000/svg"
-                                            width="14"
-                                            height="14"
-                                            viewBox="0 0 24 24"
-                                            fill="none"
-                                            stroke="currentColor"
-                                            stroke-width="2"
-                                            stroke-linecap="round"
-                                            stroke-linejoin="round"
-                                        >
-                                            <polyline points="3 6 5 6 21 6"/>
-                                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-                                        </svg>
-                                        Delete
-                                    </button>
-                                </div>
                             </div>
                         </div>
 
                         <div v-if="adminIsTyping" class="typing-indicator">
-                            <span></span>
-                            <span></span>
-                            <span></span>
+                            <span></span><span></span><span></span>
                         </div>
                     </template>
                 </div>
 
 
+                <!-- File preview -->
                 <div v-if="selectedFile" class="file-preview">
                     <span class="file-icon">📎</span>
                     <span class="file-name">{{ selectedFile.name }}</span>
                     <span class="file-size">{{ formatSize(selectedFile.size) }}</span>
-
-                    <button
-                        class="remove-file"
-                        type="button"
-                        @click="clearSelectedFile"
-                        :disabled="sending"
-                        aria-label="Remove file"
-                    >
-                        ×
-                    </button>
+                    <button class="remove-file" type="button" @click="clearSelectedFile" :disabled="sending">×</button>
                 </div>
 
 
+                <!-- Reply preview -->
+                <div v-if="replyTo" class="reply-preview">
+                    <div class="reply-preview-content">
+                        <strong>Replying to {{ replyTo.sender_type === 'user' ? 'yourself' : 'Admin' }}</strong>
+                        <span>{{ replyTo.message || replyTo.attachment_name || 'Attachment' }}</span>
+                    </div>
+                    <button type="button" class="reply-cancel" @click="cancelReply">×</button>
+                </div>
+
+
+                <!-- Blocked banner -->
+                <div v-if="isBlocked" class="blocked-banner">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"/>
+                        <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>
+                    </svg>
+                    <span>You have been blocked from sending messages. {{ blockedReason ? `Reason: ${blockedReason}` : '' }}</span>
+                </div>
+
+
+                <!-- Emoji picker -->
                 <div v-if="showEmojiPicker" class="emoji-picker-wrapper">
                     <EmojiPicker
                         :native="true"
@@ -257,10 +230,8 @@
                 </div>
 
 
-                <form
-                    class="chat-input-area"
-                    @submit.prevent="sendMessage"
-                >
+                <!-- Input -->
+                <form v-if="!isBlocked" class="chat-input-area" @submit.prevent="sendMessage">
                     <input
                         ref="fileInput"
                         type="file"
@@ -269,38 +240,10 @@
                         @change="onFileSelected"
                     />
 
-                    <button
-                        v-if="!isRecording"
-                        type="button"
-                        class="emoji-button"
-                        @click="toggleEmojiPicker"
-                        :disabled="sending"
-                        title="Emoji"
-                        aria-label="Emoji"
-                    >
-                        😀
-                    </button>
+                    <button v-if="!isRecording" type="button" class="emoji-button" @click="toggleEmojiPicker" :disabled="sending" title="Emoji">😀</button>
 
-                    <button
-                        v-if="!isRecording"
-                        type="button"
-                        class="attach-button"
-                        @click="openFilePicker"
-                        :disabled="sending"
-                        title="Attach file"
-                        aria-label="Attach file"
-                    >
-                        <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            width="22"
-                            height="22"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="2.5"
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                        >
+                    <button v-if="!isRecording" type="button" class="attach-button" @click="openFilePicker" :disabled="sending" title="Attach">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                             <line x1="12" y1="5" x2="12" y2="19"></line>
                             <line x1="5" y1="12" x2="19" y2="12"></line>
                         </svg>
@@ -313,19 +256,8 @@
                         @click="startRecording"
                         :disabled="sending || !!newMessage.trim()"
                         title="Record voice"
-                        aria-label="Record voice"
                     >
-                        <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            width="22"
-                            height="22"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="2"
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                        >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
                             <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
                             <line x1="12" y1="19" x2="12" y2="23"/>
@@ -349,40 +281,21 @@
                         type="submit"
                         class="send-button"
                         :disabled="sending || (!newMessage.trim() && !selectedFile)"
-                        aria-label="Send"
                     >
                         <span v-if="sending">...</span>
                         <span v-else>➤</span>
                     </button>
 
-
                     <div v-if="isRecording" class="recording-bar">
-                        <button
-                            type="button"
-                            class="recording-cancel"
-                            @click="cancelRecording"
-                            aria-label="Cancel"
-                        >
-                            <svg
-                                xmlns="http://www.w3.org/2000/svg"
-                                width="14"
-                                height="14"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                stroke-width="2.5"
-                                stroke-linecap="round"
-                            >
+                        <button type="button" class="recording-cancel" @click="cancelRecording">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
                                 <line x1="18" y1="6" x2="6" y2="18"/>
                                 <line x1="6" y1="6" x2="18" y2="18"/>
                             </svg>
                         </button>
 
                         <span class="recording-dot"></span>
-
-                        <span class="recording-time">
-                            {{ formattedRecordTime }}
-                        </span>
+                        <span class="recording-time">{{ formattedRecordTime }}</span>
 
                         <div class="recording-waveform">
                             <span
@@ -393,20 +306,8 @@
                             ></span>
                         </div>
 
-                        <button
-                            type="button"
-                            class="recording-stop"
-                            @click="stopAndSendRecording"
-                            :disabled="recordSeconds < 1"
-                            aria-label="Send"
-                        >
-                            <svg
-                                xmlns="http://www.w3.org/2000/svg"
-                                width="18"
-                                height="18"
-                                viewBox="0 0 24 24"
-                                fill="currentColor"
-                            >
+                        <button type="button" class="recording-stop" @click="stopAndSendRecording" :disabled="recordSeconds < 1">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
                                 <path d="M2 21l21-9L2 3v7l15 2-15 2z"/>
                             </svg>
                         </button>
@@ -415,6 +316,75 @@
 
             </div>
 
+
+            <!-- Rating -->
+            <div v-if="showRating" class="rating-overlay" @click.self="showRating = false">
+                <div class="rating-modal">
+                    <h3>Rate this conversation</h3>
+                    <p>How was your experience?</p>
+
+                    <div class="rating-stars">
+                        <button
+                            v-for="star in 5"
+                            :key="star"
+                            type="button"
+                            @click="ratingValue = star"
+                            :class="{ active: star <= ratingValue }"
+                        >★</button>
+                    </div>
+
+                    <textarea v-model="ratingFeedback" placeholder="Optional feedback..." maxlength="1000" rows="3"></textarea>
+
+                    <div class="rating-actions">
+                        <button type="button" class="btn-cancel" @click="showRating = false">Cancel</button>
+                        <button type="button" class="btn-primary" @click="submitRating" :disabled="!ratingValue || ratingSubmitting">
+                            {{ ratingSubmitting ? 'Sending...' : 'Submit' }}
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+
+            <!-- Lightbox -->
+            <ImageLightbox v-model="lightboxOpen" :src="lightboxSrc" />
+
+        </div>
+    </Teleport>
+
+
+    <!-- Context Menu -->
+    <Teleport to="body">
+        <div v-if="activeMenu && activeMenuMessage" class="message-menu" :style="menuStyle" @click.stop>
+            <button type="button" class="menu-item" @click="startReply">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="9 17 4 12 9 7"/>
+                    <path d="M20 18v-2a4 4 0 0 0-4-4H4"/>
+                </svg>
+                Reply
+            </button>
+
+            <button type="button" class="menu-item" @click="toggleStar">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" :fill="activeMenuMessage?.is_starred ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                </svg>
+                {{ activeMenuMessage?.is_starred ? 'Unstar' : 'Star' }}
+            </button>
+
+            <button type="button" class="menu-item" @click="deleteForMe">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+                    <line x1="1" y1="1" x2="23" y2="23"/>
+                </svg>
+                Delete for me
+            </button>
+
+            <button type="button" class="menu-item danger" @click="deleteForEveryone">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="3 6 5 6 21 6"/>
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                </svg>
+                Delete for everyone
+            </button>
         </div>
     </Teleport>
 </template>
@@ -439,10 +409,21 @@ import {
     markChatAsRead,
     sendUserTyping,
     deleteChatMessage,
+    searchUserChat,
+    rateChat,
+    toggleStarMessage,
 } from '../services/chat';
 
 import { useUserChatChannel } from '../composables/useChatChannel';
 import VoicePlayer from './VoicePlayer.vue';
+import ImageLightbox from './ImageLightbox.vue';
+
+import { playNotificationSound, isMuted } from '../utils/notificationSound';
+import {
+    requestNotificationPermission,
+    showNotification,
+    isDesktopNotificationsEnabled,
+} from '../utils/desktopNotifications';
 
 
 /*
@@ -463,17 +444,36 @@ const selectedFile = ref(null);
 
 const showEmojiPicker = ref(false);
 const adminIsTyping = ref(false);
+const replyTo = ref(null);
+
+const showSearch = ref(false);
+const searchQuery = ref('');
+
+const showRating = ref(false);
+const ratingValue = ref(0);
+const ratingFeedback = ref('');
+const ratingSubmitting = ref(false);
+
+const lightboxOpen = ref(false);
+const lightboxSrc = ref('');
+
+const isBlocked = ref(false);
+const blockedReason = ref('');
+
 const activeMenu = ref(null);
+const activeMenuMessage = ref(null);
+const menuStyle = ref({ top: '0px', left: '0px' });
 
 let unreadPollTimer = null;
 let messagePollTimer = null;
 let typingTimer = null;
 let typingDebounce = null;
+let searchDebounce = null;
 
 
 /*
 |--------------------------------------------------------------------------
-| Voice state
+| Voice
 |--------------------------------------------------------------------------
 */
 
@@ -505,6 +505,22 @@ const { connected } = useUserChatChannel({
             scrollToBottom();
         }
 
+        if (!isMuted() && payload.sender_type !== 'user') {
+            playNotificationSound();
+        }
+
+        if (
+            isDesktopNotificationsEnabled() &&
+            !isOpen.value &&
+            payload.sender_type !== 'user'
+        ) {
+            showNotification(
+                'New message from Support',
+                payload.message || 'You have a new message',
+                () => { if (!isOpen.value) toggleChat(); }
+            );
+        }
+
         if (isOpen.value) {
             unreadCount.value = 0;
             markChatAsRead().catch(() => {});
@@ -519,9 +535,7 @@ const { connected } = useUserChatChannel({
 
     onRead: (payload) => {
         const msg = messages.value.find((m) => m.id === payload.id);
-        if (msg) {
-            msg.read_at = payload.read_at;
-        }
+        if (msg) msg.read_at = payload.read_at;
     },
 
     onDeleted: (payload) => {
@@ -533,14 +547,27 @@ const { connected } = useUserChatChannel({
         }
     },
 
+    onDeletedForMe: (payload) => {
+        if (payload.deleter_type === 'admin') {
+            messages.value = messages.value.filter((m) => m.id !== payload.id);
+        }
+    },
+
+    onStarred: (payload) => {
+        const msg = messages.value.find((m) => m.id === payload.id);
+        if (msg) msg.is_starred = payload.is_starred;
+    },
+
+    onBlocked: (payload) => {
+        isBlocked.value = !!payload.is_blocked;
+        blockedReason.value = payload.blocked_reason || '';
+    },
+
     onTyping: (payload) => {
         if (payload.sender_type === 'admin') {
             adminIsTyping.value = true;
-
             clearTimeout(typingTimer);
-            typingTimer = setTimeout(() => {
-                adminIsTyping.value = false;
-            }, 3000);
+            typingTimer = setTimeout(() => { adminIsTyping.value = false; }, 3000);
         }
     },
 });
@@ -548,7 +575,7 @@ const { connected } = useUserChatChannel({
 
 /*
 |--------------------------------------------------------------------------
-| Formatted Record Time
+| Computed
 |--------------------------------------------------------------------------
 */
 
@@ -561,20 +588,20 @@ const formattedRecordTime = computed(() => {
 
 /*
 |--------------------------------------------------------------------------
-| Load Chat
+| Load
 |--------------------------------------------------------------------------
 */
 
 const loadChat = async () => {
     try {
-        if (messages.value.length === 0) {
-            loading.value = true;
-        }
+        if (messages.value.length === 0) loading.value = true;
 
         const response = await getChat();
 
         if (response.data?.success) {
             messages.value = response.data.messages || [];
+            isBlocked.value = !!response.data.is_blocked;
+            blockedReason.value = response.data.blocked_reason || '';
             await scrollToBottom();
 
             if (isOpen.value) {
@@ -582,18 +609,11 @@ const loadChat = async () => {
             }
         }
     } catch (error) {
-        console.error('Failed to load chat:', error);
+        console.error('Load error:', error);
     } finally {
         loading.value = false;
     }
 };
-
-
-/*
-|--------------------------------------------------------------------------
-| Load Unread Count
-|--------------------------------------------------------------------------
-*/
 
 const loadUnreadCount = async () => {
     try {
@@ -611,14 +631,14 @@ const loadUnreadCount = async () => {
             unreadCount.value = newCount;
         }
     } catch (error) {
-        console.error('Unread count error:', error);
+        console.error('Unread error:', error);
     }
 };
 
 
 /*
 |--------------------------------------------------------------------------
-| Toggle / Close
+| Toggle
 |--------------------------------------------------------------------------
 */
 
@@ -636,22 +656,23 @@ const toggleChat = async () => {
 const closeChat = () => {
     isOpen.value = false;
     showEmojiPicker.value = false;
-    activeMenu.value = null;
+    showSearch.value = false;
+    showRating.value = false;
+    replyTo.value = null;
+    closeMessageMenu();
 };
 
 
 /*
 |--------------------------------------------------------------------------
-| Typing indicator
+| Typing
 |--------------------------------------------------------------------------
 */
 
 const onInputTyping = () => {
     if (typingDebounce) return;
 
-    typingDebounce = setTimeout(() => {
-        typingDebounce = null;
-    }, 2000);
+    typingDebounce = setTimeout(() => { typingDebounce = null; }, 2000);
 
     sendUserTyping().catch(() => {});
 };
@@ -674,7 +695,7 @@ const onEmojiSelect = (emoji) => {
 
 /*
 |--------------------------------------------------------------------------
-| File Handling
+| File
 |--------------------------------------------------------------------------
 */
 
@@ -687,8 +708,7 @@ const onFileSelected = (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    const maxSize = 20 * 1024 * 1024;
-    if (file.size > maxSize) {
+    if (file.size > 20 * 1024 * 1024) {
         alert('File too large. Max 20 MB.');
         event.target.value = '';
         return;
@@ -712,7 +732,7 @@ const formatSize = (bytes) => {
 
 /*
 |--------------------------------------------------------------------------
-| Send Message
+| Send
 |--------------------------------------------------------------------------
 */
 
@@ -726,7 +746,11 @@ const sendMessage = async () => {
     try {
         sending.value = true;
 
-        const response = await sendChatMessage(messageText, file);
+        const response = await sendChatMessage(
+            messageText,
+            file,
+            replyTo.value?.id || null
+        );
 
         if (response.data?.success && response.data?.message) {
             const msg = response.data.message;
@@ -738,11 +762,14 @@ const sendMessage = async () => {
             newMessage.value = '';
             clearSelectedFile();
             showEmojiPicker.value = false;
+            replyTo.value = null;
 
             await scrollToBottom();
         }
     } catch (error) {
-        console.error('Send error:', error);
+        if (error.response?.data?.blocked) {
+            isBlocked.value = true;
+        }
         alert(error.response?.data?.message || 'Message send nahi ho saka.');
     } finally {
         sending.value = false;
@@ -752,29 +779,111 @@ const sendMessage = async () => {
 
 /*
 |--------------------------------------------------------------------------
-| Delete Message
+| Context Menu
 |--------------------------------------------------------------------------
 */
 
 const openMenu = (event, message) => {
     if (message.deleted_at) return;
-    if (message.sender_type !== 'user') return;
 
     activeMenu.value = message.id;
+    activeMenuMessage.value = message;
+
+    const menuWidth = 220;
+    const menuHeight = 190;
+    const padding = 10;
+
+    let x = event.clientX;
+    let y = event.clientY;
+
+    if (x + menuWidth > window.innerWidth - padding) {
+        x = window.innerWidth - menuWidth - padding;
+    }
+
+    if (y + menuHeight > window.innerHeight - padding) {
+        y = y - menuHeight;
+    }
+
+    if (x < padding) x = padding;
+    if (y < padding) y = padding;
+
+    menuStyle.value = { top: y + 'px', left: x + 'px' };
 };
 
 const closeMessageMenu = () => {
     activeMenu.value = null;
+    activeMenuMessage.value = null;
 };
 
-const deleteMessage = async (message) => {
-    activeMenu.value = null;
 
-    if (!confirm('Delete this message?')) return;
+/*
+|--------------------------------------------------------------------------
+| Reply
+|--------------------------------------------------------------------------
+*/
+
+const startReply = () => {
+    if (!activeMenuMessage.value) return;
+    replyTo.value = activeMenuMessage.value;
+    closeMessageMenu();
+};
+
+const cancelReply = () => {
+    replyTo.value = null;
+};
+
+
+/*
+|--------------------------------------------------------------------------
+| Star
+|--------------------------------------------------------------------------
+*/
+
+const toggleStar = async () => {
+    const message = activeMenuMessage.value;
+    if (!message) return;
+
+    closeMessageMenu();
 
     try {
-        await deleteChatMessage(message.id);
+        const response = await toggleStarMessage(message.id);
+        if (response.data?.success) {
+            message.is_starred = response.data.is_starred;
+        }
+    } catch (error) {
+        alert(error.response?.data?.message || 'Unable to star.');
+    }
+};
 
+
+/*
+|--------------------------------------------------------------------------
+| Delete
+|--------------------------------------------------------------------------
+*/
+
+const deleteForMe = async () => {
+    const message = activeMenuMessage.value;
+    if (!message) return;
+
+    closeMessageMenu();
+
+    try {
+        await deleteChatMessage(message.id, 'me');
+        messages.value = messages.value.filter((m) => m.id !== message.id);
+    } catch (error) {
+        alert(error.response?.data?.message || 'Unable to delete.');
+    }
+};
+
+const deleteForEveryone = async () => {
+    const message = activeMenuMessage.value;
+    if (!message) return;
+
+    closeMessageMenu();
+
+    try {
+        await deleteChatMessage(message.id, 'all');
         message.deleted_at = new Date().toISOString();
         message.message = null;
         message.attachment_url = null;
@@ -786,28 +895,90 @@ const deleteMessage = async (message) => {
 
 /*
 |--------------------------------------------------------------------------
-| Attachment open
+| Lightbox
 |--------------------------------------------------------------------------
 */
 
-const openAttachment = (url) => {
-    window.open(url, '_blank', 'noopener,noreferrer');
+const openLightbox = (url) => {
+    lightboxSrc.value = url;
+    lightboxOpen.value = true;
 };
 
 
 /*
 |--------------------------------------------------------------------------
-| Voice recording
+| Search
+|--------------------------------------------------------------------------
+*/
+
+const debouncedSearch = () => {
+    clearTimeout(searchDebounce);
+    searchDebounce = setTimeout(runSearch, 400);
+};
+
+const runSearch = async () => {
+    if (!searchQuery.value.trim()) {
+        await loadChat();
+        return;
+    }
+
+    try {
+        const response = await searchUserChat(searchQuery.value);
+        if (response.data?.success) {
+            messages.value = response.data.messages || [];
+            await scrollToBottom();
+        }
+    } catch (error) {
+        console.error('Search failed:', error);
+    }
+};
+
+const clearSearch = async () => {
+    searchQuery.value = '';
+    showSearch.value = false;
+    await loadChat();
+};
+
+
+/*
+|--------------------------------------------------------------------------
+| Rating
+|--------------------------------------------------------------------------
+*/
+
+const openRating = () => {
+    showRating.value = true;
+    ratingValue.value = 0;
+    ratingFeedback.value = '';
+};
+
+const submitRating = async () => {
+    if (!ratingValue.value) return;
+
+    ratingSubmitting.value = true;
+
+    try {
+        await rateChat(ratingValue.value, ratingFeedback.value);
+        showRating.value = false;
+        alert('Thank you for your feedback!');
+    } catch (error) {
+        alert(error.response?.data?.message || 'Unable to submit.');
+    } finally {
+        ratingSubmitting.value = false;
+    }
+};
+
+
+/*
+|--------------------------------------------------------------------------
+| Voice
 |--------------------------------------------------------------------------
 */
 
 const startLiveBars = () => {
     stopLiveBars();
-
     liveBarTimer = setInterval(() => {
-        liveBars.value = Array.from({ length: 20 }, () =>
-            Math.floor(Math.random() * 70) + 30
-        );
+        liveBars.value = Array.from({ length: 20 }, () => Math.floor(Math.random() * 70) + 30);
     }, 120);
 };
 
@@ -823,7 +994,7 @@ const startRecording = async () => {
     if (isRecording.value || sending.value) return;
 
     if (!navigator.mediaDevices || !window.MediaRecorder) {
-        alert('Voice recording not supported.');
+        alert('Voice not supported.');
         return;
     }
 
@@ -849,7 +1020,6 @@ const startRecording = async () => {
 
             const mimeType = mediaRecorder.mimeType || 'audio/webm';
             const blob = new Blob(recordChunks, { type: mimeType });
-
             sendVoiceMessage(blob, mimeType);
         };
 
@@ -862,8 +1032,7 @@ const startRecording = async () => {
             if (recordSeconds.value >= 120) stopRecording();
         }, 200);
     } catch (error) {
-        console.error('Mic error:', error);
-        alert('Unable to start recording.');
+        alert('Mic error.');
         isRecording.value = false;
     }
 };
@@ -896,10 +1065,7 @@ const cancelRecording = () => {
 };
 
 const stopAndSendRecording = () => {
-    if (recordSeconds.value < 1) {
-        alert('Record at least 1 second.');
-        return;
-    }
+    if (recordSeconds.value < 1) return;
     stopRecording();
 };
 
@@ -915,13 +1081,14 @@ const sendVoiceMessage = async (blob, mimeType) => {
 
     try {
         sending.value = true;
-        const response = await sendChatMessage('', file);
+        const response = await sendChatMessage('', file, replyTo.value?.id || null);
 
         if (response.data?.success && response.data?.message) {
             const msg = response.data.message;
             if (!messages.value.some((m) => m.id === msg.id)) {
                 messages.value.push(msg);
             }
+            replyTo.value = null;
             await scrollToBottom();
         }
     } catch (error) {
@@ -935,7 +1102,7 @@ const sendVoiceMessage = async (blob, mimeType) => {
 
 /*
 |--------------------------------------------------------------------------
-| Scroll
+| Helpers
 |--------------------------------------------------------------------------
 */
 
@@ -945,13 +1112,6 @@ const scrollToBottom = async () => {
         messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight;
     }
 };
-
-
-/*
-|--------------------------------------------------------------------------
-| Format Time
-|--------------------------------------------------------------------------
-*/
 
 const formatTime = (date) => {
     if (!date) return '';
@@ -963,16 +1123,18 @@ const formatTime = (date) => {
 
 /*
 |--------------------------------------------------------------------------
-| Fallback Polling
+| Polling
 |--------------------------------------------------------------------------
 */
 
 const startPolling = () => {
     stopPolling();
-    unreadPollTimer = setInterval(loadUnreadCount, 15000);
+    // ⭐ 5 seconds par unread count check karein
+    unreadPollTimer = setInterval(loadUnreadCount, 5000);
+    // ⭐ 5 seconds par messages refresh karein
     messagePollTimer = setInterval(() => {
         if (isOpen.value) loadChat();
-    }, 15000);
+    }, 5000);
 };
 
 const stopPolling = () => {
@@ -989,6 +1151,17 @@ const stopPolling = () => {
 
 /*
 |--------------------------------------------------------------------------
+| Global listeners
+|--------------------------------------------------------------------------
+*/
+
+const handleScrollOrResize = () => {
+    closeMessageMenu();
+};
+
+
+/*
+|--------------------------------------------------------------------------
 | Lifecycle
 |--------------------------------------------------------------------------
 */
@@ -999,6 +1172,15 @@ onMounted(async () => {
     setTimeout(() => {
         if (!connected.value) startPolling();
     }, 1500);
+
+    if ('Notification' in window && Notification.permission === 'default') {
+        setTimeout(() => {
+            requestNotificationPermission();
+        }, 5000);
+    }
+
+    window.addEventListener('scroll', handleScrollOrResize, true);
+    window.addEventListener('resize', handleScrollOrResize);
 });
 
 onUnmounted(() => {
@@ -1015,15 +1197,17 @@ onUnmounted(() => {
 
     if (typingTimer) clearTimeout(typingTimer);
     if (typingDebounce) clearTimeout(typingDebounce);
+    if (searchDebounce) clearTimeout(searchDebounce);
+
+    window.removeEventListener('scroll', handleScrollOrResize, true);
+    window.removeEventListener('resize', handleScrollOrResize);
 });
 </script>
 
 
 <style scoped>
-
-/* =========================================================
-   WIDGET CONTAINER
-========================================================= */
+/* CSS same as before — apni file ki CSS waise hi rakh sakte hain */
+/* Agar chahein toh neeche diya gaya CSS bhi paste kar dein */
 
 .chat-widget {
     position: fixed;
@@ -1034,14 +1218,7 @@ onUnmounted(() => {
     pointer-events: none;
 }
 
-.chat-widget > * {
-    pointer-events: auto;
-}
-
-
-/* =========================================================
-   FLOATING BUTTON
-========================================================= */
+.chat-widget > * { pointer-events: auto; }
 
 .chat-button {
     position: relative;
@@ -1071,15 +1248,7 @@ onUnmounted(() => {
     transform: scale(0.5);
 }
 
-.chat-icon {
-    font-size: 25px;
-    line-height: 1;
-}
-
-
-/* =========================================================
-   UNREAD BADGE
-========================================================= */
+.chat-icon { font-size: 25px; line-height: 1; }
 
 .unread-badge {
     position: absolute;
@@ -1106,11 +1275,6 @@ onUnmounted(() => {
     100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
 }
 
-
-/* =========================================================
-   CHAT WINDOW
-========================================================= */
-
 .chat-window {
     position: fixed;
     right: 24px;
@@ -1128,14 +1292,9 @@ onUnmounted(() => {
     z-index: 100000;
 }
 
-
-/* =========================================================
-   HEADER
-========================================================= */
-
 .chat-header {
     height: 68px;
-    padding: 0 16px;
+    padding: 0 12px 0 16px;
     background: #4f46e5;
     color: #ffffff;
     display: flex;
@@ -1144,15 +1303,27 @@ onUnmounted(() => {
     flex-shrink: 0;
 }
 
-.chat-header h3 {
-    margin: 0 0 4px;
-    font-size: 17px;
+.chat-header h3 { margin: 0 0 4px; font-size: 17px; }
+.online-status { font-size: 12px; opacity: 0.9; }
+
+.header-actions { display: flex; align-items: center; gap: 4px; }
+
+.header-icon-btn {
+    width: 36px;
+    height: 36px;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: #ffffff;
+    cursor: pointer;
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s ease;
 }
 
-.online-status {
-    font-size: 12px;
-    opacity: 0.9;
-}
+.header-icon-btn:hover { background: rgba(255, 255, 255, 0.15); }
 
 .header-close {
     border: none;
@@ -1164,10 +1335,39 @@ onUnmounted(() => {
     line-height: 1;
 }
 
+.search-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: #eef2ff;
+    border-bottom: 1px solid #e5e7eb;
+    flex-shrink: 0;
+}
 
-/* =========================================================
-   MESSAGES
-========================================================= */
+.search-bar input {
+    flex: 1;
+    height: 36px;
+    border: 1px solid #d1d5db;
+    border-radius: 18px;
+    padding: 0 14px;
+    font-size: 13px;
+    outline: none;
+    background: #ffffff;
+}
+
+.search-bar button {
+    width: 28px;
+    height: 28px;
+    border: none;
+    border-radius: 50%;
+    background: #dc2626;
+    color: white;
+    font-size: 16px;
+    cursor: pointer;
+    line-height: 1;
+    flex-shrink: 0;
+}
 
 .messages-container {
     flex: 1 1 auto;
@@ -1181,23 +1381,11 @@ onUnmounted(() => {
     gap: 8px;
 }
 
-.message-row {
-    display: flex;
-    margin: 0;
-}
+.message-row { display: flex; margin: 0; }
+.user-message-row { justify-content: flex-end; }
+.admin-message-row { justify-content: flex-start; }
 
-.user-message-row {
-    justify-content: flex-end;
-}
-
-.admin-message-row {
-    justify-content: flex-start;
-}
-
-.message-bubble-wrapper {
-    position: relative;
-    max-width: 78%;
-}
+.message-bubble-wrapper { position: relative; max-width: 78%; }
 
 .message-bubble {
     padding: 8px 12px;
@@ -1232,16 +1420,26 @@ onUnmounted(() => {
     font-size: 12px;
 }
 
-.message-text {
-    font-size: 14px;
-    line-height: 1.4;
-    white-space: pre-wrap;
+.message-reply-quote {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 6px 10px;
+    margin-bottom: 6px;
+    border-left: 3px solid currentColor;
+    border-radius: 6px;
+    background: rgba(0, 0, 0, 0.05);
+    font-size: 11px;
+    opacity: 0.85;
 }
 
-.message-time {
-    font-size: 10px;
-    opacity: 0.65;
-}
+.user-message .message-reply-quote { background: rgba(255, 255, 255, 0.15); }
+
+.quote-sender { font-weight: 700; }
+.quote-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.message-text { font-size: 14px; line-height: 1.4; white-space: pre-wrap; }
+.message-time { font-size: 10px; opacity: 0.65; }
 
 .message-meta {
     display: flex;
@@ -1251,54 +1449,47 @@ onUnmounted(() => {
     margin-top: 4px;
 }
 
-.read-tick {
-    display: inline-flex;
-    align-items: center;
-    color: #94a3b8;
-}
+.star-indicator { color: #f59e0b; font-size: 11px; }
+.user-message .star-indicator { color: #fcd34d; }
 
-.read-tick.read {
-    color: #4f46e5;
-}
-
-.user-message .read-tick {
-    color: rgba(255, 255, 255, 0.6);
-}
-
-.user-message .read-tick.read {
-    color: #ffffff;
-}
+.read-tick { display: inline-flex; align-items: center; color: #94a3b8; }
+.read-tick.read { color: #4f46e5; }
+.user-message .read-tick { color: rgba(255, 255, 255, 0.6); }
+.user-message .read-tick.read { color: #ffffff; }
 
 .message-menu {
-    position: absolute;
-    top: 100%;
-    right: 0;
-    margin-top: 4px;
+    position: fixed;
+    z-index: 2147483647;
     background: #ffffff;
     border: 1px solid #e5e7eb;
     border-radius: 8px;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
-    z-index: 20;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
     overflow: hidden;
+    min-width: 220px;
+    padding: 4px 0;
+    font-family: Arial, Helvetica, sans-serif;
 }
 
-.message-menu button {
+.message-menu .menu-item {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
     width: 100%;
-    padding: 8px 14px;
+    padding: 10px 16px;
     border: none;
     background: transparent;
     font-size: 13px;
-    color: #dc2626;
+    color: #374151;
     cursor: pointer;
-    transition: background 0.15s ease;
+    text-align: left;
+    font-weight: 500;
+    white-space: nowrap;
 }
 
-.message-menu button:hover {
-    background: #fee2e2;
-}
+.message-menu .menu-item:hover { background: #f3f4f6; }
+.message-menu .menu-item.danger { color: #dc2626; }
+.message-menu .menu-item.danger:hover { background: #fee2e2; }
+.message-menu .menu-item svg { flex-shrink: 0; width: 14px; height: 14px; }
 
 .typing-indicator {
     display: flex;
@@ -1420,8 +1611,53 @@ onUnmounted(() => {
     justify-content: center;
 }
 
-.remove-file:hover { background: #b91c1c; }
-.remove-file:disabled { opacity: 0.5; cursor: not-allowed; }
+.reply-preview {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: #eef2ff;
+    border-top: 1px solid #e5e7eb;
+    border-left: 3px solid #4f46e5;
+    flex-shrink: 0;
+}
+
+.reply-preview-content {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    font-size: 12px;
+}
+
+.reply-preview-content strong { color: #4f46e5; font-weight: 700; font-size: 11px; }
+.reply-preview-content span { color: #6b7280; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.reply-cancel {
+    width: 24px;
+    height: 24px;
+    border: none;
+    border-radius: 50%;
+    background: #dc2626;
+    color: white;
+    font-size: 14px;
+    cursor: pointer;
+    line-height: 1;
+    flex-shrink: 0;
+}
+
+.blocked-banner {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    background: #fef2f2;
+    border-top: 1px solid #fecaca;
+    color: #b91c1c;
+    font-size: 12px;
+    flex-shrink: 0;
+}
 
 .emoji-picker-wrapper {
     position: absolute;
@@ -1456,11 +1692,6 @@ onUnmounted(() => {
     min-width: 0;
 }
 
-.chat-input-area input[type="text"]:focus {
-    border-color: #4f46e5;
-    box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.10);
-}
-
 .emoji-button,
 .attach-button,
 .mic-button {
@@ -1475,22 +1706,12 @@ onUnmounted(() => {
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: background 0.15s ease;
     font-size: 20px;
-}
-
-.emoji-button:hover:not(:disabled),
-.attach-button:hover:not(:disabled),
-.mic-button:hover:not(:disabled) {
-    background: #eef2ff;
 }
 
 .emoji-button:disabled,
 .attach-button:disabled,
-.mic-button:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-}
+.mic-button:disabled { opacity: 0.4; cursor: not-allowed; }
 
 .send-button {
     width: 40px;
@@ -1505,10 +1726,8 @@ onUnmounted(() => {
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: background 0.15s ease;
 }
 
-.send-button:hover:not(:disabled) { background: #4338ca; }
 .send-button:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .recording-bar {
@@ -1537,10 +1756,7 @@ onUnmounted(() => {
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: background 0.15s ease;
 }
-
-.recording-cancel:hover { background: #fee2e2; }
 
 .recording-dot {
     width: 10px;
@@ -1596,11 +1812,82 @@ onUnmounted(() => {
     align-items: center;
     justify-content: center;
     margin-left: auto;
-    transition: background 0.15s ease;
 }
 
-.recording-stop:hover:not(:disabled) { background: #b91c1c; }
 .recording-stop:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.rating-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 999999;
+    background: rgba(17, 24, 39, 0.55);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.rating-modal {
+    width: 100%;
+    max-width: 380px;
+    padding: 28px;
+    background: white;
+    border-radius: 16px;
+    text-align: center;
+}
+
+.rating-modal h3 { margin: 0 0 6px; color: #111827; }
+.rating-modal p { margin: 0 0 20px; color: #6b7280; font-size: 14px; }
+
+.rating-stars {
+    display: flex;
+    justify-content: center;
+    gap: 6px;
+    margin-bottom: 20px;
+}
+
+.rating-stars button {
+    background: transparent;
+    border: none;
+    font-size: 38px;
+    color: #d1d5db;
+    cursor: pointer;
+    line-height: 1;
+    padding: 0;
+}
+
+.rating-stars button:hover,
+.rating-stars button.active { color: #f59e0b; }
+
+.rating-modal textarea {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    outline: none;
+    font-family: inherit;
+    font-size: 13px;
+    resize: vertical;
+    margin-bottom: 18px;
+    box-sizing: border-box;
+}
+
+.rating-actions { display: flex; gap: 10px; }
+
+.rating-actions button {
+    flex: 1;
+    height: 42px;
+    border: none;
+    border-radius: 10px;
+    font-weight: 600;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.btn-cancel { background: #f3f4f6; color: #374151; }
+.btn-primary { background: #4f46e5; color: white; }
+.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .messages-container::-webkit-scrollbar { width: 6px; }
 .messages-container::-webkit-scrollbar-thumb {
@@ -1620,14 +1907,5 @@ onUnmounted(() => {
         height: auto;
         max-height: calc(100vh - 110px);
     }
-
-    .chat-button {
-        width: 54px;
-        height: 54px;
-        font-size: 22px;
-    }
-
-    .chat-icon { font-size: 22px; }
 }
-
 </style>

@@ -493,24 +493,14 @@ onMounted(async () => {
 ========================================================= */
 
 .admin-dashboard {
-
-    width: 100%;
-
-    min-height: 100%;
-
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
     padding: 30px;
-
     box-sizing: border-box;
-
     background: transparent;
-
     color: #111827;
-
-    font-family:
-        Arial,
-        Helvetica,
-        sans-serif;
-
+    font-family: Arial, Helvetica, sans-serif;
 }
 
 

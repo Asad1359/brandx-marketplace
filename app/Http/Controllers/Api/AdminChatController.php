@@ -2,465 +2,784 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Events\ConversationCreated;
-use App\Events\MessageDeleted;
-use App\Events\MessageRead;
-use App\Events\MessageSent;
-use App\Events\UnreadCountUpdated;
-use App\Events\UserTyping;
 use App\Http\Controllers\Controller;
+
 use App\Models\ChatConversation;
+use App\Models\ChatConversationMember;
 use App\Models\ChatMessage;
+use App\Models\CannedResponse;
 use App\Models\User;
-use App\Notifications\NewChatMessageForAdmin;
-use App\Notifications\NewChatMessageForUser;
+
+use App\Events\MessageSent;
+use App\Events\MessageDeleted;
+use App\Events\MessageDeletedForMe;
+use App\Events\MessageRead;
+use App\Events\MessageStarred;
+use App\Events\UserTyping;
+use App\Events\ConversationArchived;
+use App\Events\ConversationBlocked;
+use App\Events\ConversationCleared;
+use App\Events\ConversationDeleted;
+use App\Events\MessageAssigned;
+
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
+
 
 class AdminChatController extends Controller
 {
     /*
-    |--------------------------------------------------------------------------
-    | USER: Get Chat Messages
-    |--------------------------------------------------------------------------
+    |==========================================================================
+    | LIST CONVERSATIONS
+    |==========================================================================
+    | GET /api/admin/chat/conversations
+    |
+    | Query params:
+    |   ?status=open|blocked|archived
+    |   ?assigned_to={userId}
+    |   ?search={keyword}
+    |   ?page={n}
+    |   ?per_page=20
+    |==========================================================================
     */
 
-    public function userMessages(Request $request)
+    public function conversations(Request $request): JsonResponse
     {
-        $user = Auth::user();
-
-        $conversation = ChatConversation::firstOrCreate(
-            ['user_id' => $user->id],
-            ['unread_admin' => 0, 'unread_user' => 0]
-        );
-
-        $messages = $conversation->messages()
-            ->orderBy('id', 'asc')
-            ->get();
-
-        $conversation->update(['unread_user' => 0]);
-
-        $conversation->messages()
-            ->where('sender_type', 'admin')
-            ->whereNull('read_at')
-            ->update([
-                'is_read' => true,
-                'read_at' => now(),
+        $query = ChatConversation::query()
+            ->with([
+                'user:id,name,email',
+                'assignee:id,name,email',
+                'members:id,name,email',
+                'lastMessage',
             ]);
 
-        broadcast(new UnreadCountUpdated((int) $user->id, 0));
+        /*
+        |----------------------------------------------------------------------
+        | Filter by status
+        |----------------------------------------------------------------------
+        */
+
+        if ($request->filled('status')) {
+
+            $status = $request->query('status');
+
+            if ($status === 'archived') {
+                $query->where('is_archived', true);
+            } elseif ($status === 'blocked') {
+                $query->where('is_blocked', true);
+            } elseif ($status === 'open') {
+                $query->where('is_archived', false)
+                      ->where('is_blocked', false);
+            }
+        }
+
+        /*
+        |----------------------------------------------------------------------
+        | Filter by assigned admin
+        |----------------------------------------------------------------------
+        */
+
+        if ($request->filled('assigned_to')) {
+            $query->where('assigned_to', $request->query('assigned_to'));
+        }
+
+        /*
+        |----------------------------------------------------------------------
+        | Search by user name/email or conversation name
+        |----------------------------------------------------------------------
+        */
+
+        if ($request->filled('search')) {
+
+            $keyword = $request->query('search');
+
+            $query->where(function ($q) use ($keyword) {
+
+                $q->where('name', 'like', "%{$keyword}%")
+                  ->orWhereHas('user', function ($u) use ($keyword) {
+                      $u->where('name', 'like', "%{$keyword}%")
+                        ->orWhere('email', 'like', "%{$keyword}%");
+                  })
+                  ->orWhereHas('members', function ($m) use ($keyword) {
+                      $m->where('name', 'like', "%{$keyword}%")
+                        ->orWhere('email', 'like', "%{$keyword}%");
+                  });
+            });
+        }
+
+        /*
+        |----------------------------------------------------------------------
+        | Paginate
+        |----------------------------------------------------------------------
+        */
+
+        $perPage = (int) $request->query('per_page', 20);
+
+        $conversations = $query
+            ->orderByDesc('updated_at')
+            ->paginate($perPage);
+
+        /*
+        |----------------------------------------------------------------------
+        | Transform
+        |----------------------------------------------------------------------
+        */
+
+        $conversations->getCollection()->transform(function ($c) {
+            return $this->formatConversation($c);
+        });
 
         return response()->json([
-            'success' => true,
-            'conversation_id' => $conversation->id,
+            'success'       => true,
+            'conversations' => $conversations,
+        ]);
+    }
+
+
+    /*
+    |==========================================================================
+    | SHOW SINGLE CONVERSATION
+    |==========================================================================
+    | GET /api/admin/chat/conversations/{id}
+    |==========================================================================
+    */
+
+    public function show(Request $request, $id): JsonResponse
+    {
+        $conversation = ChatConversation::with([
+            'user:id,name,email',
+            'assignee:id,name,email',
+            'members:id,name,email',
+        ])->find($id);
+
+        if (! $conversation) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Conversation not found.',
+            ], 404);
+        }
+
+        $messages = ChatMessage::query()
+            ->where('conversation_id', $conversation->id)
+            ->with(['sender:id,name,email', 'parent.sender:id,name,email'])
+            ->orderBy('created_at')
+            ->get()
+            ->map(fn ($m) => $this->formatMessage($m));
+
+        return response()->json([
+            'success'      => true,
+            'conversation' => $this->formatConversation($conversation),
+            'messages'     => $messages,
+        ]);
+    }
+
+
+    /*
+    |==========================================================================
+    | LIST MESSAGES ONLY
+    |==========================================================================
+    | GET /api/admin/chat/conversations/{id}/messages
+    |==========================================================================
+    */
+
+    public function messages(Request $request, $id): JsonResponse
+    {
+        $conversation = ChatConversation::find($id);
+
+        if (! $conversation) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Conversation not found.',
+            ], 404);
+        }
+
+        $messages = ChatMessage::query()
+            ->where('conversation_id', $conversation->id)
+            ->with(['sender:id,name,email', 'parent.sender:id,name,email'])
+            ->orderBy('created_at')
+            ->get()
+            ->map(fn ($m) => $this->formatMessage($m));
+
+        return response()->json([
+            'success'  => true,
             'messages' => $messages,
         ]);
     }
 
 
     /*
-    |--------------------------------------------------------------------------
-    | USER: Send Message
-    |--------------------------------------------------------------------------
+    |==========================================================================
+    | SEND ADMIN MESSAGE
+    |==========================================================================
+    | POST /api/admin/chat/conversations/{id}/messages
+    |==========================================================================
     */
 
-    public function userSendMessage(Request $request)
+    public function sendMessage(Request $request, $id): JsonResponse
     {
-        $request->validate([
-            'message' => ['nullable', 'string', 'max:5000'],
-            'attachment' => ['nullable', 'file', 'max:20480'],
-        ]);
+        $conversation = ChatConversation::find($id);
 
-        if (!$request->filled('message') && !$request->hasFile('attachment')) {
+        if (! $conversation) {
             return response()->json([
                 'success' => false,
-                'message' => 'Please enter a message or attach a file.',
+                'message' => 'Conversation not found.',
+            ], 404);
+        }
+
+        /*
+        |----------------------------------------------------------------------
+        | Blocked check
+        |----------------------------------------------------------------------
+        */
+
+        if ($conversation->is_blocked) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Conversation is blocked.',
+            ], 423);
+        }
+
+        /*
+        |----------------------------------------------------------------------
+        | Validation
+        |----------------------------------------------------------------------
+        */
+
+        $request->validate([
+            'message'    => 'nullable|string|max:5000',
+            'attachment' => 'nullable|file|max:20480',
+            'parent_id'  => 'nullable|integer|exists:chat_messages,id',
+        ]);
+
+        if (
+            ! $request->filled('message') &&
+            ! $request->hasFile('attachment')
+        ) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Message or attachment is required.',
             ], 422);
         }
 
-        $user = Auth::user();
+        $admin = $request->user();
 
-        $conversation = ChatConversation::firstOrCreate(
-            ['user_id' => $user->id],
-            ['unread_admin' => 0, 'unread_user' => 0]
-        );
+        $data = [
+            'conversation_id'   => $conversation->id,
+            'parent_message_id' => $request->input('parent_id'),
+            'sender_id'         => $admin->id,
+            'sender_type'       => 'admin',
+            'message'           => $request->input('message'),
+        ];
 
-        $isNewConversation = $conversation->messages()->count() === 0;
+        /*
+        |----------------------------------------------------------------------
+        | Attachment handling
+        |----------------------------------------------------------------------
+        */
 
-        $messageText = trim((string) $request->input('message', ''));
+        if ($request->hasFile('attachment')) {
 
-        $attachmentData = $this->storeAttachment($request);
+            $file = $request->file('attachment');
+            $path = $file->store('chat/attachments', 'public');
 
-        $message = ChatMessage::create([
-            'conversation_id' => $conversation->id,
-            'sender_type' => 'user',
-            'sender_id' => $user->id,
-            'message' => $messageText ?: null,
-            'is_read' => false,
-            ...$attachmentData,
-        ]);
+            $mime = $file->getMimeType();
+
+            $data['attachment_path'] = $path;
+            $data['attachment_name'] = $file->getClientOriginalName();
+            $data['attachment_size'] = $file->getSize();
+            $data['attachment_type'] = $mime;
+        }
+
+        $message = ChatMessage::create($data);
+
+        /*
+        |----------------------------------------------------------------------
+        | Update conversation preview
+        |----------------------------------------------------------------------
+        */
 
         $conversation->update([
-            'last_message' => $messageText ?: '📎 Attachment',
-            'unread_admin' => $conversation->unread_admin + 1,
+            'last_message'   => $message->message
+                ?: $message->attachment_name,
+            'last_reply_at'  => now(),
+            'unread_user'    => $conversation->unread_user + 1,
         ]);
 
-        broadcast(new MessageSent($message));
+        /*
+        |----------------------------------------------------------------------
+        | Load relations and format
+        |----------------------------------------------------------------------
+        */
 
-        if ($isNewConversation) {
-            broadcast(new ConversationCreated($conversation->fresh('user')));
+        $message->load(['sender:id,name,email']);
+
+        $payload = $this->formatMessage($message);
+
+        /*
+        |----------------------------------------------------------------------
+        | Broadcast to user + other admins
+        |----------------------------------------------------------------------
+        */
+
+        if ($conversation->user_id) {
+            broadcast(new MessageSent(
+                $payload,
+                $conversation->user_id
+            ))->toOthers();
         }
 
-        $admins = User::where('role', 'admin')
-            ->where('is_active', true)
-            ->get();
-
-        foreach ($admins as $admin) {
-            $admin->notify(
-                new NewChatMessageForAdmin($conversation, $user->name)
-            );
-        }
+        broadcast(new MessageSent($payload, 0))
+            ->toOthers();
 
         return response()->json([
             'success' => true,
-            'message' => $message->fresh(),
+            'message' => $payload,
         ], 201);
     }
 
 
     /*
-    |--------------------------------------------------------------------------
-    | USER: Unread Count
-    |--------------------------------------------------------------------------
+    |==========================================================================
+    | MARK AS READ
+    |==========================================================================
+    | POST /api/admin/chat/conversations/{id}/read
+    |==========================================================================
     */
 
-    public function userUnreadCount()
+    public function markAsRead(Request $request, $id): JsonResponse
     {
-        $user = Auth::user();
+        $conversation = ChatConversation::find($id);
 
-        $conversation = ChatConversation::where('user_id', $user->id)->first();
-
-        return response()->json([
-            'success' => true,
-            'count' => $conversation?->unread_user ?? 0,
-        ]);
-    }
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | USER: Mark messages as read
-    |--------------------------------------------------------------------------
-    */
-
-    public function userMarkAsRead(Request $request)
-    {
-        $user = Auth::user();
-
-        $conversation = ChatConversation::where('user_id', $user->id)->first();
-
-        if (!$conversation) {
-            return response()->json(['success' => false], 404);
-        }
-
-        $now = now();
-        $marked = 0;
-
-        $messages = $conversation->messages()
-            ->where('sender_type', 'admin')
-            ->whereNull('read_at')
-            ->get();
-
-        foreach ($messages as $message) {
-            $message->update(['read_at' => $now, 'is_read' => true]);
-            broadcast(new MessageRead($message));
-            $marked++;
-        }
-
-        return response()->json([
-            'success' => true,
-            'marked' => $marked,
-        ]);
-    }
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | USER: Broadcast typing
-    |--------------------------------------------------------------------------
-    */
-
-    public function userTyping(Request $request)
-    {
-        $user = Auth::user();
-
-        broadcast(new UserTyping(
-            (int) $user->id,
-            'user',
-            $user->name
-        ))->toOthers();
-
-        return response()->json(['success' => true]);
-    }
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | ADMIN: Get All Conversations
-    |--------------------------------------------------------------------------
-    */
-
-    public function adminConversations()
-    {
-        $conversations = ChatConversation::with('user')
-            ->withCount([
-                'messages as unread_messages_count' => function ($query) {
-                    $query->where('sender_type', 'user')
-                        ->where('is_read', false);
-                },
-            ])
-            ->orderByDesc('updated_at')
-            ->get();
-
-        return response()->json([
-            'success' => true,
-            'chats' => $conversations,
-        ]);
-    }
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | ADMIN: Get Specific User Conversation
-    |--------------------------------------------------------------------------
-    */
-
-    public function adminMessages($userId)
-    {
-        $user = User::find($userId);
-
-        if (!$user) {
+        if (! $conversation) {
             return response()->json([
                 'success' => false,
-                'message' => 'User not found.',
+                'message' => 'Conversation not found.',
             ], 404);
         }
 
-        $conversation = ChatConversation::where('user_id', $user->id)->first();
+        /*
+        |----------------------------------------------------------------------
+        | Mark unread user messages as read
+        |----------------------------------------------------------------------
+        */
 
-        if (!$conversation) {
-            return response()->json([
-                'success' => true,
-                'conversation_id' => null,
-                'user' => $user,
-                'messages' => [],
+        ChatMessage::query()
+            ->where('conversation_id', $conversation->id)
+            ->where('sender_type', 'user')
+            ->where('is_read', false)
+            ->update([
+                'is_read' => true,
+                'read_at' => now(),
             ]);
-        }
-
-        $messages = $conversation->messages()
-            ->orderBy('id', 'asc')
-            ->get();
 
         $conversation->update(['unread_admin' => 0]);
 
-        $conversation->messages()
-            ->where('sender_type', 'user')
-            ->whereNull('read_at')
-            ->update([
-                'is_read' => true,
-                'read_at' => now(),
-            ]);
-
         return response()->json([
             'success' => true,
-            'conversation_id' => $conversation->id,
-            'user' => $user,
-            'messages' => $messages,
         ]);
     }
 
 
     /*
-    |--------------------------------------------------------------------------
-    | ADMIN: Send Message
-    |--------------------------------------------------------------------------
+    |==========================================================================
+    | TYPING INDICATOR
+    |==========================================================================
+    | POST /api/admin/chat/conversations/{id}/typing
+    |==========================================================================
     */
 
-    public function adminSendMessage(Request $request, $userId)
+    public function typing(Request $request, $id): JsonResponse
     {
-        $request->validate([
-            'message' => ['nullable', 'string', 'max:5000'],
-            'attachment' => ['nullable', 'file', 'max:20480'],
-        ]);
+        $conversation = ChatConversation::find($id);
 
-        if (!$request->filled('message') && !$request->hasFile('attachment')) {
+        if (! $conversation) {
             return response()->json([
                 'success' => false,
-                'message' => 'Please enter a message or attach a file.',
-            ], 422);
-        }
-
-        $user = User::find($userId);
-
-        if (!$user) {
-            return response()->json([
-                'success' => false,
-                'message' => 'User not found.',
+                'message' => 'Conversation not found.',
             ], 404);
         }
 
-        $conversation = ChatConversation::firstOrCreate(
-            ['user_id' => $user->id],
-            ['unread_admin' => 0, 'unread_user' => 0]
-        );
+        $admin = $request->user();
 
-        $messageText = trim((string) $request->input('message', ''));
+        if ($conversation->user_id) {
+            broadcast(new UserTyping(
+                (int) $conversation->id,
+                $admin->id,
+                $admin->name,
+                $conversation->user_id
+            ))->toOthers();
+        }
 
-        $attachmentData = $this->storeAttachment($request);
-
-        $message = ChatMessage::create([
-            'conversation_id' => $conversation->id,
-            'sender_type' => 'admin',
-            'sender_id' => Auth::id(),
-            'message' => $messageText ?: null,
-            'is_read' => false,
-            ...$attachmentData,
+        return response()->json([
+            'success' => true,
         ]);
+    }
+
+
+    /*
+    |==========================================================================
+    | CANNED RESPONSES
+    |==========================================================================
+    | GET /api/admin/chat/canned-responses
+    |==========================================================================
+    */
+
+    public function cannedResponses(): JsonResponse
+    {
+        $responses = CannedResponse::orderBy('title')->get();
+
+        return response()->json([
+            'success'   => true,
+            'responses' => $responses,
+        ]);
+    }
+
+
+    /*
+    |==========================================================================
+    | SEARCH MESSAGES
+    |==========================================================================
+    | GET /api/admin/chat/search?q=
+    |==========================================================================
+    */
+
+    public function search(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'q' => 'required|string|min:2|max:100',
+        ]);
+
+        $results = ChatMessage::query()
+            ->whereNull('deleted_at')
+            ->where('message', 'like', '%' . $validated['q'] . '%')
+            ->with(['sender:id,name,email', 'conversation:id,user_id,name'])
+            ->orderByDesc('created_at')
+            ->limit(50)
+            ->get()
+            ->map(function ($m) {
+                return [
+                    'id'              => $m->id,
+                    'conversation_id' => $m->conversation_id,
+                    'conversation'    => $m->conversation ? [
+                        'id'   => $m->conversation->id,
+                        'name' => $m->conversation->name,
+                    ] : null,
+                    'sender'          => $m->sender ? [
+                        'id'   => $m->sender->id,
+                        'name' => $m->sender->name,
+                    ] : null,
+                    'message'         => $m->message,
+                    'created_at'      => $m->created_at,
+                ];
+            });
+
+        return response()->json([
+            'success' => true,
+            'results' => $results,
+        ]);
+    }
+
+
+    /*
+    |==========================================================================
+    | ASSIGN CONVERSATION
+    |==========================================================================
+    | POST /api/admin/chat/conversations/{id}/assign
+    |
+    | Payload: { admin_id }
+    |==========================================================================
+    */
+
+    public function assign(Request $request, $id): JsonResponse
+    {
+        $validated = $request->validate([
+            'admin_id' => 'required|integer|exists:users,id',
+        ]);
+
+        $conversation = ChatConversation::find($id);
+
+        if (! $conversation) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Conversation not found.',
+            ], 404);
+        }
+
+        $conversation->assigned_to = $validated['admin_id'];
+        $conversation->save();
+
+        broadcast(new MessageAssigned($conversation))->toOthers();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Conversation assigned.',
+        ]);
+    }
+
+
+    /*
+    |==========================================================================
+    | BLOCK CONVERSATION
+    |==========================================================================
+    | POST /api/admin/chat/conversations/{id}/block
+    |
+    | Payload: { reason? }
+    |==========================================================================
+    */
+
+    public function block(Request $request, $id): JsonResponse
+    {
+        $validated = $request->validate([
+            'reason' => 'nullable|string|max:500',
+        ]);
+
+        $conversation = ChatConversation::find($id);
+
+        if (! $conversation) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Conversation not found.',
+            ], 404);
+        }
 
         $conversation->update([
-            'last_message' => $messageText ?: '📎 Attachment',
-            'unread_user' => $conversation->unread_user + 1,
+            'is_blocked'     => true,
+            'blocked_at'     => now(),
+            'blocked_reason' => $validated['reason'] ?? null,
         ]);
 
-        broadcast(new MessageSent($message));
-
-        broadcast(new UnreadCountUpdated(
-            (int) $user->id,
-            (int) $conversation->fresh()->unread_user
-        ));
-
-        $user->notify(new NewChatMessageForUser($conversation));
-
-        return response()->json([
-            'success' => true,
-            'message' => $message->fresh(),
-        ], 201);
-    }
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | ADMIN: Unread Chats Count
-    |--------------------------------------------------------------------------
-    */
-
-    public function adminUnreadCount()
-    {
-        $count = ChatConversation::where('unread_admin', '>', 0)
-            ->sum('unread_admin');
-
-        return response()->json([
-            'success' => true,
-            'count' => $count,
-        ]);
-    }
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | ADMIN: Mark messages as read
-    |--------------------------------------------------------------------------
-    */
-
-    public function adminMarkAsRead($userId)
-    {
-        $conversation = ChatConversation::where('user_id', $userId)->first();
-
-        if (!$conversation) {
-            return response()->json(['success' => false], 404);
-        }
-
-        $now = now();
-        $marked = 0;
-
-        $messages = $conversation->messages()
-            ->where('sender_type', 'user')
-            ->whereNull('read_at')
-            ->get();
-
-        foreach ($messages as $message) {
-            $message->update(['read_at' => $now, 'is_read' => true]);
-            broadcast(new MessageRead($message));
-            $marked++;
-        }
-
-        return response()->json([
-            'success' => true,
-            'marked' => $marked,
-        ]);
-    }
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | ADMIN: Broadcast typing
-    |--------------------------------------------------------------------------
-    */
-
-    public function adminTyping(Request $request, $userId)
-    {
-        $admin = Auth::user();
-
-        broadcast(new UserTyping(
-            (int) $userId,
-            'admin',
-            $admin->name
+        broadcast(new ConversationBlocked(
+            $conversation,
+            $request->user()->name
         ))->toOthers();
 
-        return response()->json(['success' => true]);
+        return response()->json([
+            'success' => true,
+            'message' => 'Conversation blocked.',
+        ]);
     }
 
 
     /*
-    |--------------------------------------------------------------------------
-    | DELETE MESSAGE
-    |--------------------------------------------------------------------------
+    |==========================================================================
+    | UNBLOCK CONVERSATION
+    |==========================================================================
+    | POST /api/admin/chat/conversations/{id}/unblock
+    |==========================================================================
     */
 
-    public function deleteMessage($messageId)
+    public function unblock(Request $request, $id): JsonResponse
     {
-        $user = Auth::user();
+        $conversation = ChatConversation::find($id);
 
-        $message = ChatMessage::find($messageId);
+        if (! $conversation) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Conversation not found.',
+            ], 404);
+        }
 
-        if (!$message) {
+        $conversation->update([
+            'is_blocked'     => false,
+            'blocked_at'     => null,
+            'blocked_reason' => null,
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Conversation unblocked.',
+        ]);
+    }
+
+
+    /*
+    |==========================================================================
+    | CLEAR CONVERSATION MESSAGES
+    |==========================================================================
+    | POST /api/admin/chat/conversations/{id}/clear
+    |==========================================================================
+    */
+
+    public function clear(Request $request, $id): JsonResponse
+    {
+        $conversation = ChatConversation::find($id);
+
+        if (! $conversation) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Conversation not found.',
+            ], 404);
+        }
+
+        ChatMessage::where('conversation_id', $conversation->id)
+            ->forceDelete();
+
+        $conversation->update([
+            'last_message'  => null,
+            'unread_admin'  => 0,
+            'unread_user'   => 0,
+        ]);
+
+        broadcast(new ConversationCleared($conversation))->toOthers();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Conversation cleared.',
+        ]);
+    }
+
+
+    /*
+    |==========================================================================
+    | ARCHIVE CONVERSATION
+    |==========================================================================
+    | POST /api/admin/chat/conversations/{id}/archive
+    |==========================================================================
+    */
+
+    public function archive(Request $request, $id): JsonResponse
+    {
+        $conversation = ChatConversation::find($id);
+
+        if (! $conversation) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Conversation not found.',
+            ], 404);
+        }
+
+        $conversation->update([
+            'is_archived' => true,
+            'archived_at' => now(),
+        ]);
+
+        broadcast(new ConversationArchived($conversation))->toOthers();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Conversation archived.',
+        ]);
+    }
+
+
+    /*
+    |==========================================================================
+    | UNARCHIVE CONVERSATION
+    |==========================================================================
+    | POST /api/admin/chat/conversations/{id}/unarchive
+    |==========================================================================
+    */
+
+    public function unarchive(Request $request, $id): JsonResponse
+    {
+        $conversation = ChatConversation::find($id);
+
+        if (! $conversation) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Conversation not found.',
+            ], 404);
+        }
+
+        $conversation->update([
+            'is_archived' => false,
+            'archived_at' => null,
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Conversation unarchived.',
+        ]);
+    }
+
+
+    /*
+    |==========================================================================
+    | DELETE CONVERSATION
+    |==========================================================================
+    | DELETE /api/admin/chat/conversations/{id}
+    |==========================================================================
+    */
+
+    public function destroy(Request $request, $id): JsonResponse
+    {
+        $conversation = ChatConversation::find($id);
+
+        if (! $conversation) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Conversation not found.',
+            ], 404);
+        }
+
+        $userId = $conversation->user_id;
+        $conversationId = $conversation->id;
+
+        ChatMessage::where('conversation_id', $conversation->id)
+            ->forceDelete();
+
+        ChatConversationMember::where('conversation_id', $conversation->id)
+            ->delete();
+
+        $conversation->delete();
+
+        broadcast(new ConversationDeleted(
+            $userId,
+            $conversationId
+        ))->toOthers();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Conversation deleted.',
+        ]);
+    }
+
+
+    /*
+    |==========================================================================
+    | DELETE SINGLE MESSAGE
+    |==========================================================================
+    | DELETE /api/admin/chat/messages/{id}?scope=all|me
+    |==========================================================================
+    */
+
+    public function deleteMessage(Request $request, $id): JsonResponse
+    {
+        $scope = $request->query('scope', 'all');
+
+        $message = ChatMessage::find($id);
+
+        if (! $message) {
             return response()->json([
                 'success' => false,
                 'message' => 'Message not found.',
             ], 404);
         }
 
-        if ($user->role !== 'admin') {
-            if (
-                $message->sender_type !== 'user' ||
-                (int) $message->sender_id !== (int) $user->id
-            ) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Unauthorized.',
-                ], 403);
+        if ($scope === 'me') {
+
+            $message->update(['deleted_for_sender' => true]);
+
+            broadcast(new MessageDeletedForMe(
+                $message,
+                'admin'
+            ))->toOthers();
+
+        } else {
+
+            $message->delete();
+
+            $conversation = $message->conversation;
+
+            if ($conversation) {
+                broadcast(new MessageDeleted(
+                    $message->id,
+                    $conversation->user_id
+                ))->toOthers();
             }
         }
-
-        // Capture data before delete
-        $messageId = $message->id;
-        $conversationId = $message->conversation_id;
-        $conversation = $message->conversation;
-
-        $message->delete();
-
-        // Broadcast manually since message is deleted
-        broadcast(new MessageDeleted($message))->toOthers();
 
         return response()->json([
             'success' => true,
@@ -470,31 +789,171 @@ class AdminChatController extends Controller
 
 
     /*
+    |==========================================================================
+    | TOGGLE STAR ON MESSAGE
+    |==========================================================================
+    | POST /api/admin/chat/messages/{id}/star
+    |==========================================================================
+    */
+
+    public function toggleStar(Request $request, $id): JsonResponse
+    {
+        $message = ChatMessage::find($id);
+
+        if (! $message) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Message not found.',
+            ], 404);
+        }
+
+        $message->is_starred = ! $message->is_starred;
+        $message->starred_at = $message->is_starred ? now() : null;
+        $message->save();
+
+        broadcast(new MessageStarred($message))->toOthers();
+
+        return response()->json([
+            'success'    => true,
+            'is_starred' => (bool) $message->is_starred,
+        ]);
+    }
+
+
+    /*
+    |==========================================================================
+    | RATINGS LIST
+    |==========================================================================
+    | GET /api/admin/chat/ratings
+    |==========================================================================
+    */
+
+    public function ratings(): JsonResponse
+    {
+        $ratings = \App\Models\ChatRating::query()
+            ->with([
+                'conversation:id,user_id,name',
+                'user:id,name,email',
+            ])
+            ->orderByDesc('created_at')
+            ->paginate(20);
+
+        $average = round(
+            \App\Models\ChatRating::avg('rating') ?? 0,
+            2
+        );
+
+        $total = \App\Models\ChatRating::count();
+
+        return response()->json([
+            'success'  => true,
+            'ratings'  => $ratings,
+            'average'  => $average,
+            'total'    => $total,
+        ]);
+    }
+
+
+    /*
+    |==========================================================================
+    | HELPERS
+    |==========================================================================
+    */
+
+    /*
     |--------------------------------------------------------------------------
-    | HELPER: Store Attachment
+    | Format a conversation for JSON
     |--------------------------------------------------------------------------
     */
 
-    private function storeAttachment(Request $request): array
+    protected function formatConversation(ChatConversation $c): array
     {
-        if (!$request->hasFile('attachment')) {
-            return [
-                'attachment_path' => null,
-                'attachment_name' => null,
-                'attachment_type' => null,
-                'attachment_size' => null,
-            ];
-        }
-
-        $file = $request->file('attachment');
-
-        $path = $file->store('chat-attachments', 'public');
-
         return [
-            'attachment_path' => $path,
-            'attachment_name' => $file->getClientOriginalName(),
-            'attachment_type' => $file->getClientMimeType(),
-            'attachment_size' => $file->getSize(),
+            'id'            => $c->id,
+            'type'          => $c->type,
+            'name'          => $c->display_name,
+            'avatar'        => $c->avatar_path,
+            'is_blocked'    => (bool) $c->is_blocked,
+            'is_archived'   => (bool) $c->is_archived,
+            'assigned_to'   => $c->assigned_to,
+            'last_message'  => $c->last_message,
+            'last_reply_at' => $c->last_reply_at,
+            'unread_admin'  => (int) $c->unread_admin,
+            'unread_user'   => (int) $c->unread_user,
+            'updated_at'    => $c->updated_at,
+
+            'user'     => $c->user ? [
+                'id'    => $c->user->id,
+                'name'  => $c->user->name,
+                'email' => $c->user->email,
+            ] : null,
+
+            'assignee' => $c->assignee ? [
+                'id'    => $c->assignee->id,
+                'name'  => $c->assignee->name,
+                'email' => $c->assignee->email,
+            ] : null,
+
+            'members'  => $c->relationLoaded('members')
+                ? $c->members->map(fn ($m) => [
+                    'id'    => $m->id,
+                    'name'  => $m->name,
+                    'email' => $m->email,
+                ])
+                : [],
+        ];
+    }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Format a message for JSON / broadcast
+    |--------------------------------------------------------------------------
+    */
+
+    protected function formatMessage(ChatMessage $message): array
+    {
+        return [
+            'id'              => $message->id,
+            'conversation_id' => $message->conversation_id,
+            'sender_id'       => $message->sender_id,
+            'sender_type'     => $message->sender_type,
+
+            'sender' => $message->sender ? [
+                'id'   => $message->sender->id,
+                'name' => $message->sender->name,
+            ] : null,
+
+            'message'         => $message->message,
+            'attachment_url'  => $message->attachment_path
+                ? Storage::disk('public')->url($message->attachment_path)
+                : null,
+            'attachment_name' => $message->attachment_name,
+            'attachment_size' => $message->attachment_size,
+            'attachment_type' => $message->attachment_type,
+
+            'is_image'   => (bool) $message->is_image,
+            'is_video'   => (bool) $message->is_video,
+            'is_audio'   => (bool) $message->is_audio,
+            'is_pdf'     => (bool) $message->is_pdf,
+            'is_starred' => (bool) $message->is_starred,
+            'is_read'    => (bool) $message->is_read,
+
+            'read_at'    => $message->read_at,
+            'deleted_at' => $message->deleted_at,
+
+            'parent' => $message->parent ? [
+                'id'              => $message->parent->id,
+                'sender_type'     => $message->parent->sender_type,
+                'message'         => $message->parent->message,
+                'attachment_name' => $message->parent->attachment_name,
+                'sender'          => $message->parent->sender ? [
+                    'id'   => $message->parent->sender->id,
+                    'name' => $message->parent->sender->name,
+                ] : null,
+            ] : null,
+
+            'created_at' => $message->created_at,
         ];
     }
 }

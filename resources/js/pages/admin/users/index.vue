@@ -1062,11 +1062,12 @@ onMounted(() => {
 
 <style scoped>
 .users-page {
-    padding: 28px;
-    max-width: 1600px;
-    margin: 0 auto;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 24px;
+    box-sizing: border-box;
 }
-
 .page-header {
     display: flex;
     justify-content: space-between;

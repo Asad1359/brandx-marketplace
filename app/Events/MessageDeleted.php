@@ -2,7 +2,6 @@
 
 namespace App\Events;
 
-use App\Models\ChatMessage;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
@@ -13,29 +12,31 @@ class MessageDeleted implements ShouldBroadcast
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
-    public function __construct(public ChatMessage $message) {}
+    public $messageId;
+    public $recipientId;
 
-    public function broadcastOn(): array
+    public function __construct(int $messageId, int $recipientId)
     {
-        $conversation = $this->message->conversation;
-
-        return [
-            new PrivateChannel('chat.user.' . $conversation->user_id),
-            new PrivateChannel('chat.admin'),
-        ];
+        $this->messageId = $messageId;
+        $this->recipientId = $recipientId;
     }
 
-    public function broadcastAs(): string
+    public function broadcastOn()
+    {
+        return new PrivateChannel(
+            'chat.user.' . $this->recipientId
+        );
+    }
+
+    public function broadcastAs()
     {
         return 'message.deleted';
     }
 
-    public function broadcastWith(): array
+    public function broadcastWith()
     {
         return [
-            'id' => $this->message->id,
-            'conversation_id' => $this->message->conversation_id,
-            'user_id' => $this->message->conversation->user_id,
+            'id' => $this->messageId,
         ];
     }
 }

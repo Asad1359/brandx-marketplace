@@ -2,6 +2,13 @@
 
 use Illuminate\Support\Facades\Route;
 
-Route::get('/{any?}', function () {
-    return view('vue');
+/*
+|--------------------------------------------------------------------------
+| SPA CATCH-ALL
+|--------------------------------------------------------------------------
+| All non-API routes fall through to the Vue app.
+*/
+
+Route::get('/{any}', function () {
+    return view('app');
 })->where('any', '.*');

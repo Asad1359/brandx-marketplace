@@ -555,10 +555,10 @@
 
 
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import axios from 'axios';
 
-import { authState } from '../stores/auth';
+import { authState, loadUser } from '../stores/auth';
 
 
 /*
@@ -584,6 +584,25 @@ const userDashboardRoute = computed(() => {
     return authState.user?.role === 'admin'
         ? '/admin/dashboard'
         : '/dashboard';
+});
+
+
+/*
+|--------------------------------------------------------------------------
+| ✅ Load user on Home page mount
+|--------------------------------------------------------------------------
+| Taake Home.vue ko pata chale ke actually logged in ho ya nahi.
+|--------------------------------------------------------------------------
+*/
+
+onMounted(async () => {
+    try {
+        if (!authState.initialized) {
+            await loadUser();
+        }
+    } catch (err) {
+        console.warn('Home: loadUser failed', err);
+    }
 });
 
 

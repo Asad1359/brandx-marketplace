@@ -7,10 +7,11 @@ import {
 
 import { saveUser } from '../services/api';
 
+
 /*
-|--------------------------------------------------------------------------
+|==========================================================================
 | AUTH STATE
-|--------------------------------------------------------------------------
+|==========================================================================
 */
 
 export const authState = reactive({
@@ -21,9 +22,9 @@ export const authState = reactive({
 
 
 /*
-|--------------------------------------------------------------------------
-| LOAD CURRENT USER
-|--------------------------------------------------------------------------
+|==========================================================================
+| LOAD CURRENT USER (from backend)
+|==========================================================================
 */
 
 export async function loadUser() {
@@ -38,10 +39,7 @@ export async function loadUser() {
 
         console.log('Current user response:', response.data);
 
-        if (
-            response.data &&
-            response.data.success === false
-        ) {
+        if (response.data && response.data.success === false) {
             authState.user = null;
             return null;
         }
@@ -55,6 +53,7 @@ export async function loadUser() {
         return authState.user;
 
     } catch (error) {
+
         if (error.response?.status === 401) {
             console.warn('User is not authenticated.');
         } else {
@@ -65,7 +64,6 @@ export async function loadUser() {
         }
 
         authState.user = null;
-
         return null;
 
     } finally {
@@ -76,9 +74,9 @@ export async function loadUser() {
 
 
 /*
-|--------------------------------------------------------------------------
-| SET USER
-|--------------------------------------------------------------------------
+|==========================================================================
+| SET USER (after login)
+|==========================================================================
 */
 
 export function setAuthUser(user) {
@@ -92,9 +90,11 @@ export function setAuthUser(user) {
 
 
 /*
-|--------------------------------------------------------------------------
+|==========================================================================
 | LOGOUT
-|--------------------------------------------------------------------------
+|==========================================================================
+| ⚠️ `initialized = false` set karna zaroori hai taake next
+| loadUser() backend se dobara fetch kare.
 */
 
 export async function logout() {
@@ -107,18 +107,20 @@ export async function logout() {
         );
     } finally {
         authState.user = null;
-        authState.initialized = true;
+        authState.initialized = false;
         authState.loading = false;
 
         localStorage.removeItem('auth_user');
+        localStorage.removeItem('registration_email');
+        localStorage.removeItem('password_reset_email');
     }
 }
 
 
 /*
-|--------------------------------------------------------------------------
+|==========================================================================
 | HELPERS
-|--------------------------------------------------------------------------
+|==========================================================================
 */
 
 export function isLoggedIn() {
@@ -135,7 +137,10 @@ export function getAuthUser() {
 
 export function clearAuthState() {
     authState.user = null;
-    authState.initialized = true;
+    authState.initialized = false;
     authState.loading = false;
+
     localStorage.removeItem('auth_user');
+    localStorage.removeItem('registration_email');
+    localStorage.removeItem('password_reset_email');
 }

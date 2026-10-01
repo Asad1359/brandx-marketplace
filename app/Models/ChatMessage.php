@@ -18,16 +18,24 @@ class ChatMessage extends Model
         'assigned_to',
         'message',
         'is_read',
+        'is_starred',
+        'starred_at',
         'read_at',
         'attachment_path',
         'attachment_name',
         'attachment_type',
         'attachment_size',
+        'deleted_for_sender',
+        'deleted_for_receiver',
     ];
 
     protected $casts = [
         'is_read' => 'boolean',
+        'is_starred' => 'boolean',
+        'deleted_for_sender' => 'boolean',
+        'deleted_for_receiver' => 'boolean',
         'read_at' => 'datetime',
+        'starred_at' => 'datetime',
         'attachment_size' => 'integer',
     ];
 
@@ -77,4 +85,10 @@ class ChatMessage extends Model
     {
         return $this->attachment_type === 'application/pdf';
     }
+
+    public function sender()
+{
+    return $this->belongsTo(User::class, 'sender_id');
+}
+
 }

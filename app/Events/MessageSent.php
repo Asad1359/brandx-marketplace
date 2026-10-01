@@ -2,7 +2,7 @@
 
 namespace App\Events;
 
-use App\Models\ChatMessage;
+use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
@@ -13,44 +13,29 @@ class MessageSent implements ShouldBroadcast
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
-    public function __construct(public ChatMessage $message) {}
+    public $message;
+    public $recipientId;
 
-    public function broadcastOn(): array
+    public function __construct(array $message, int $recipientId)
     {
-        $conversation = $this->message->conversation;
-
-        return [
-            new PrivateChannel('chat.user.' . $conversation->user_id),
-            new PrivateChannel('chat.admin'),
-        ];
+        $this->message = $message;
+        $this->recipientId = $recipientId;
     }
 
-    public function broadcastAs(): string
+    public function broadcastOn()
+    {
+        return new PrivateChannel(
+            'chat.user.' . $this->recipientId
+        );
+    }
+
+    public function broadcastAs()
     {
         return 'message.sent';
     }
 
-    public function broadcastWith(): array
+    public function broadcastWith()
     {
-        $this->message->loadMissing('conversation');
-
-        return [
-            'id' => $this->message->id,
-            'conversation_id' => $this->message->conversation_id,
-            'user_id' => $this->message->conversation->user_id,
-            'sender_type' => $this->message->sender_type,
-            'sender_id' => $this->message->sender_id,
-            'message' => $this->message->message,
-            'is_read' => (bool) $this->message->is_read,
-            'attachment_url' => $this->message->attachment_url,
-            'attachment_name' => $this->message->attachment_name,
-            'attachment_type' => $this->message->attachment_type,
-            'attachment_size' => $this->message->attachment_size,
-            'is_image' => $this->message->is_image,
-            'is_video' => $this->message->is_video,
-            'is_audio' => $this->message->is_audio,
-            'is_pdf' => $this->message->is_pdf,
-            'created_at' => $this->message->created_at?->toISOString(),
-        ];
+        return $this->message;
     }
 }
